@@ -6,7 +6,7 @@ export const SENSOR_NAMES_ARRAY = [
   'Alpha-001', 'Bravo-007', 'Charlie-113', 'Delta-224', 'Echo-5',
   'Foxtrot-99', 'Golf-747', 'Hotel-California', 'India-One', 'Juliet-Rose'
 ];
-export const SENSOR_TYPES_ARRAY: SensorData['type'][] = ['Temperature', 'Humidity', 'Pressure', 'Light', 'Motion', 'Generic'];
+export const SENSOR_TYPES_ARRAY: SensorData['type'][] = ['Temperature', 'Humidity', 'Pressure', 'Light', 'Motion', 'Generic', 'CO2'];
 export const DEVICE_NAMES_ARRAY = ['Thermostat-LivingRoom', 'Sensor-Backdoor', 'Monitor-Warehouse', 'LightSwitch-Office', 'WeatherStation-Rooftop'];
 
 const UNITS: { [key in SensorData['type']]: string } = {
@@ -15,7 +15,8 @@ const UNITS: { [key in SensorData['type']]: string } = {
   Pressure: 'hPa',
   Light: 'lux',
   Motion: 'detections',
-  Generic: 'units'
+  Generic: 'units',
+  CO2: 'ppm'
 };
 
 export function generateSensorData(count: number): SensorData[] {
@@ -55,6 +56,7 @@ export function generateSensorReadings(sensorName: string, sensorType: SensorDat
     case 'Pressure': baseValue = 1012; break;
     case 'Light': baseValue = 450; break;
     case 'Motion': baseValue = 1; break; // Represents detection counts, so smaller, integer-like
+    case 'CO2': baseValue = 450; break; // Base value for CO2 in ppm
     default: baseValue = 30;
   }
 
