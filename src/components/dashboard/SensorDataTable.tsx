@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import type { SensorData } from '@/types';
-import { format } from 'date-fns';
 import { Thermometer, Zap, Droplets, Gauge, LucideIcon, Lightbulb, AlertCircle, HardDrive, Pencil, Trash2 } from 'lucide-react';
 
 interface SensorDataTableProps {
@@ -53,7 +52,6 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data, onEditSensor, onDelet
             <TableHead>Device</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Type</TableHead>
-            <TableHead>Last Update</TableHead>
             {(onEditSensor || onDeleteSensor) && <TableHead className="text-right w-[120px]">Actions</TableHead>}
           </TableRow>
         </TableHeader>
@@ -69,7 +67,6 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data, onEditSensor, onDelet
                 <SensorTypeIcon type={sensor.type} />
                 {sensor.type}
               </TableCell>
-              <TableCell>{format(new Date(sensor.timestamp), 'PPpp')}</TableCell>
               {(onEditSensor || onDeleteSensor) && (
                 <TableCell className="text-right">
                   {onEditSensor && (
