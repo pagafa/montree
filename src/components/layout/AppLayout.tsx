@@ -17,7 +17,9 @@ import {
 } from '@/components/ui/sidebar';
 import AppLogo from '@/components/AppLogo';
 import SettingsPanel from '@/components/settings/SettingsPanel';
-import { Home, HardDrive, Cpu, BarChart3, PanelLeft } from 'lucide-react';
+import { Home, HardDrive, Cpu, BarChart3, PanelLeft, LogOut } from 'lucide-react';
+import { usePassword } from '@/context/PasswordContext';
+import LoginPage from '@/components/auth/LoginPage';
 
 // Helper component to use useSidebar hook for AppLogo
 const SidebarLogoWrapper = () => {
@@ -32,6 +34,11 @@ interface AppLayoutProps {
 
 export default function AppLayout({ children, pageTitle }: AppLayoutProps) {
   const pathname = usePathname();
+  const { isAuthenticated, logout } = usePassword();
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -42,9 +49,9 @@ export default function AppLayout({ children, pageTitle }: AppLayoutProps) {
         <ShadSidebarContent className="p-2 flex flex-col">
           <SidebarMenu className="flex-grow">
             <SidebarMenuItem>
-              <SidebarMenuButton 
-                asChild 
-                isActive={pathname === '/'} 
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === '/'}
                 className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground"
                 tooltip={{ children: "Dashboard", side: "right", align: "center" }}
               >
@@ -52,9 +59,9 @@ export default function AppLayout({ children, pageTitle }: AppLayoutProps) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton 
-                asChild 
-                isActive={pathname === '/devices'} 
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === '/devices'}
                 className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground"
                 tooltip={{ children: "Devices", side: "right", align: "center" }}
               >
@@ -62,9 +69,9 @@ export default function AppLayout({ children, pageTitle }: AppLayoutProps) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton 
-                asChild 
-                isActive={pathname === '/sensors'} 
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === '/sensors'}
                 className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground"
                 tooltip={{ children: "Sensors", side: "right", align: "center" }}
               >
@@ -72,9 +79,9 @@ export default function AppLayout({ children, pageTitle }: AppLayoutProps) {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton 
-                asChild 
-                isActive={pathname === '/charts'} 
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === '/charts'}
                 className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-primary data-[active=true]:text-sidebar-primary-foreground"
                 tooltip={{ children: "Charts", side: "right", align: "center" }}
               >
@@ -84,6 +91,15 @@ export default function AppLayout({ children, pageTitle }: AppLayoutProps) {
           </SidebarMenu>
           <div className="mt-auto">
              <SettingsPanel />
+             <div className="p-2 border-t border-sidebar-border">
+                <SidebarMenuButton
+                    onClick={logout}
+                    className="w-full text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    tooltip={{ children: "Log Out", side: "right", align: "center" }}
+                >
+                    <LogOut size={18} /> <span>Log Out</span>
+                </SidebarMenuButton>
+             </div>
           </div>
         </ShadSidebarContent>
       </Sidebar>
