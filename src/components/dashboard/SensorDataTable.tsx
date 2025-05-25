@@ -7,7 +7,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import type { SensorData } from '@/types';
 import { format } from 'date-fns';
 import { Thermometer, Zap, Droplets, Gauge, LucideIcon, Lightbulb, Wind, AlertCircle } from 'lucide-react';
@@ -43,7 +42,6 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data }) => {
             <TableHead>Value</TableHead>
             <TableHead>Location</TableHead>
             <TableHead>Last Update</TableHead>
-            <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -57,14 +55,6 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data }) => {
               <TableCell>{sensor.value} {sensor.unit}</TableCell>
               <TableCell>{sensor.location}</TableCell>
               <TableCell>{format(new Date(sensor.timestamp), 'PPpp')}</TableCell>
-              <TableCell>
-                <Badge variant={
-                  sensor.status === 'active' ? 'default' :
-                  sensor.status === 'inactive' ? 'secondary' : 'destructive'
-                }>
-                  {sensor.status}
-                </Badge>
-              </TableCell>
             </TableRow>
           ))}
         </TableBody>

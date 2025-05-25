@@ -6,7 +6,6 @@ export interface SensorData {
   unit: string;
   timestamp: Date;
   location: string;
-  status: 'active' | 'inactive' | 'error';
 }
 
 export interface SensorReading {

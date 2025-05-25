@@ -7,7 +7,6 @@ const SENSOR_NAMES = [
 ];
 const SENSOR_TYPES: SensorData['type'][] = ['Temperature', 'Humidity', 'Pressure', 'Light', 'Motion', 'Generic'];
 const LOCATIONS = ['Server Room A', 'Lobby', 'Warehouse Section 3', 'Office 201', 'Rooftop Unit'];
-const STATUSES: SensorData['status'][] = ['active', 'inactive', 'error'];
 const UNITS: { [key in SensorData['type']]: string } = {
   Temperature: '°C',
   Humidity: '%',
@@ -30,7 +29,6 @@ export function generateSensorData(count: number): SensorData[] {
       unit: UNITS[type],
       timestamp: subMinutes(now, Math.floor(Math.random() * 60)),
       location: LOCATIONS[i % LOCATIONS.length],
-      status: STATUSES[i % STATUSES.length],
     });
   }
   return data;
