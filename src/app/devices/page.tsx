@@ -43,9 +43,9 @@ export default function DevicesPage() {
   }, []);
 
   const handleAddDevice = () => {
-    form.reset({ 
-      userVisibleId: `DEV-${(devices.length + 1).toString().padStart(3, '0')}`, 
-      name: '' 
+    form.reset({
+      userVisibleId: `DEV-${(devices.length + 1).toString().padStart(3, '0')}`,
+      name: ''
     });
     setIsAddDialogOpen(true);
   };
@@ -66,10 +66,10 @@ export default function DevicesPage() {
       form.setError("userVisibleId", { type: "manual", message: "This Device ID already exists. Please use a unique ID." });
       return;
     }
-    const newDevice: ManagedDevice = { 
+    const newDevice: ManagedDevice = {
       id: crypto.randomUUID(), // System-generated immutable ID
-      userVisibleId: data.userVisibleId, 
-      name: data.name 
+      userVisibleId: data.userVisibleId,
+      name: data.name
     };
     setDevices(prev => [newDevice, ...prev].sort((a,b) => a.name.localeCompare(b.name)));
     setIsAddDialogOpen(false);
@@ -135,8 +135,8 @@ export default function DevicesPage() {
                 </TableHeader>
                 <TableBody>
                   {devices.map((device) => (
-                    <TableRow key={device.id}> {/* Use internal system ID for key */}
-                       <TableCell className="font-mono text-xs">{device.userVisibleId}</TableCell>
+                    <TableRow key={device.id}>{/* Use internal system ID for key */}
+                      <TableCell className="font-mono text-xs">{device.userVisibleId}</TableCell>
                       <TableCell className="font-medium">
                         <HardDrive className="h-4 w-4 mr-2 inline-block text-muted-foreground" />
                         {device.name}
@@ -232,3 +232,5 @@ export default function DevicesPage() {
     </AppLayout>
   );
 }
+
+    
