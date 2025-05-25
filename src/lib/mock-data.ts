@@ -1,6 +1,6 @@
 
-import type { SensorData, ManagedDevice } from '@/types';
-import { subMinutes } from 'date-fns';
+import type { SensorData, ManagedDevice, SensorReading } from '@/types';
+import { subMinutes, subHours, format } from 'date-fns';
 
 export const SENSOR_NAMES_ARRAY = [
   'Alpha-001', 'Bravo-007', 'Charlie-113', 'Delta-224', 'Echo-5',
@@ -42,4 +42,36 @@ export function generateInitialDeviceList(): ManagedDevice[] {
     userVisibleId: `DEV-${(index + 1).toString().padStart(3, '0')}`, // User-facing, editable ID
     name,
   }));
+}
+
+export function generateSensorReadings(sensorName: string, sensorType: SensorData['type'], count: number = 24): SensorReading[] {
+  const readings: SensorReading[] = [];
+  const now = new Date();
+  let baseValue: number;
+  // Slightly different base values for different sensor types for variety
+  switch (sensorType) {
+    case 'Temperature': baseValue = 20; break;
+    case 'Humidity': baseValue = 55; break;
+    case 'Pressure': baseValue = 1012; break;
+    case 'Light': baseValue = 450; break;
+    case 'Motion': baseValue = 1; break; // Represents detection counts, so smaller, integer-like
+    default: baseValue = 30;
+  }
+
+  for (let i = 0; i < count; i++) {
+    let readingValue: number;
+    if (sensorType === 'Motion') {
+      // Motion typically is binary (detected/not) or a count over a small interval
+      readingValue = Math.random() > 0.7 ? Math.floor(Math.random() * 3) + 1 : 0; // 0, 1, 2, or 3 detections
+    } else {
+      // For other sensors, a continuous value with some noise
+      readingValue = parseFloat((baseValue + (Math.random() * (baseValue * 0.1) - (baseValue * 0.05))).toFixed(2)); // +/- 5% noise
+    }
+    
+    readings.push({
+      timestamp: format(subHours(now, count - 1 - i), 'HH:mm'), // e.g., "14:30"
+      value: readingValue
+    });
+  }
+  return readings;
 }
