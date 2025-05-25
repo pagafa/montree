@@ -1,12 +1,14 @@
-import type { SensorData } from '@/types';
+
+import type { SensorData, ManagedDevice } from '@/types';
 import { subMinutes } from 'date-fns';
 
-const SENSOR_NAMES = [
-  'Alpha-001', 'Bravo-007', 'Charlie-113', 'Delta-224', 'Echo-5', 
+export const SENSOR_NAMES_ARRAY = [
+  'Alpha-001', 'Bravo-007', 'Charlie-113', 'Delta-224', 'Echo-5',
   'Foxtrot-99', 'Golf-747', 'Hotel-California', 'India-One', 'Juliet-Rose'
 ];
-const SENSOR_TYPES: SensorData['type'][] = ['Temperature', 'Humidity', 'Pressure', 'Light', 'Motion', 'Generic'];
-const DEVICE_NAMES = ['Thermostat-LivingRoom', 'Sensor-Backdoor', 'Monitor-Warehouse', 'LightSwitch-Office', 'WeatherStation-Rooftop']; // Changed from LOCATIONS
+export const SENSOR_TYPES_ARRAY: SensorData['type'][] = ['Temperature', 'Humidity', 'Pressure', 'Light', 'Motion', 'Generic'];
+export const DEVICE_NAMES_ARRAY = ['Thermostat-LivingRoom', 'Sensor-Backdoor', 'Monitor-Warehouse', 'LightSwitch-Office', 'WeatherStation-Rooftop'];
+
 const UNITS: { [key in SensorData['type']]: string } = {
   Temperature: '°C',
   Humidity: '%',
@@ -20,16 +22,23 @@ export function generateSensorData(count: number): SensorData[] {
   const data: SensorData[] = [];
   const now = new Date();
   for (let i = 0; i < count; i++) {
-    const type = SENSOR_TYPES[i % SENSOR_TYPES.length];
+    const type = SENSOR_TYPES_ARRAY[i % SENSOR_TYPES_ARRAY.length];
     data.push({
-      id: `sensor-${i + 1}`,
-      name: SENSOR_NAMES[i % SENSOR_NAMES.length],
+      id: crypto.randomUUID(),
+      name: SENSOR_NAMES_ARRAY[i % SENSOR_NAMES_ARRAY.length],
       type,
       value: parseFloat((Math.random() * 100).toFixed(2)),
       unit: UNITS[type],
       timestamp: subMinutes(now, Math.floor(Math.random() * 60)),
-      device: DEVICE_NAMES[i % DEVICE_NAMES.length], // Changed from location to device
+      device: DEVICE_NAMES_ARRAY[i % DEVICE_NAMES_ARRAY.length],
     });
   }
   return data;
+}
+
+export function generateInitialDeviceList(): ManagedDevice[] {
+  return DEVICE_NAMES_ARRAY.map(name => ({
+    id: crypto.randomUUID(),
+    name,
+  }));
 }

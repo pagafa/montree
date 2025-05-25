@@ -1,3 +1,4 @@
+
 export interface SensorData {
   id: string;
   name: string;
@@ -5,10 +6,16 @@ export interface SensorData {
   value: number;
   unit: string;
   timestamp: Date;
-  device: string; // Changed from location to device
+  device: string;
 }
 
 export interface DisplayConfig {
   theme: 'light' | 'dark' | 'system';
   // Add other configuration options here
+}
+
+// For managing devices on the devices page
+export interface ManagedDevice {
+  id: string;
+  name: string;
 }

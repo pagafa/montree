@@ -8,12 +8,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import type { SensorData } from '@/types';
 import { format } from 'date-fns';
-import { Thermometer, Zap, Droplets, Gauge, LucideIcon, Lightbulb, AlertCircle, HardDrive } from 'lucide-react';
+import { Thermometer, Zap, Droplets, Gauge, LucideIcon, Lightbulb, AlertCircle, HardDrive, Pencil, Trash2 } from 'lucide-react';
 
 interface SensorDataTableProps {
   data: SensorData[];
+  onEditSensor?: (sensor: SensorData) => void;
+  onDeleteSensor?: (sensor: SensorData) => void;
 }
 
 const SensorTypeIcon: FC<{ type: SensorData['type'] }> = ({ type }) => {
@@ -29,16 +32,16 @@ const SensorTypeIcon: FC<{ type: SensorData['type'] }> = ({ type }) => {
   return <IconComponent className="h-4 w-4 mr-2 inline-block" />;
 };
 
-const SensorDataTable: FC<SensorDataTableProps> = ({ data }) => {
+const SensorDataTable: FC<SensorDataTableProps> = ({ data, onEditSensor, onDeleteSensor }) => {
   if (!data || data.length === 0) {
     return <p className="text-sm text-muted-foreground">No sensor data available.</p>;
   }
 
   const sortedData = [...data].sort((a, b) => {
-    if (a.device < b.device) return -1;
-    if (a.device > b.device) return 1;
-    if (a.name < b.name) return -1;
-    if (a.name > b.name) return 1;
+    if (a.device.toLowerCase() < b.device.toLowerCase()) return -1;
+    if (a.device.toLowerCase() > b.device.toLowerCase()) return 1;
+    if (a.name.toLowerCase() < b.name.toLowerCase()) return -1;
+    if (a.name.toLowerCase() > b.name.toLowerCase()) return 1;
     return 0;
   });
 
@@ -52,13 +55,13 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data }) => {
             <TableHead>Type</TableHead>
             <TableHead>Value</TableHead>
             <TableHead>Last Update</TableHead>
+            {(onEditSensor || onDeleteSensor) && <TableHead className="text-right w-[120px]">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedData.map((sensor) => (
             <TableRow key={sensor.id}>
               <TableCell className="font-medium">
-                 {/* Using HardDrive icon for device, could be made more dynamic if needed */}
                 <HardDrive className="h-4 w-4 mr-2 inline-block text-muted-foreground" />
                 {sensor.device}
               </TableCell>
@@ -69,6 +72,20 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data }) => {
               </TableCell>
               <TableCell>{sensor.value} {sensor.unit}</TableCell>
               <TableCell>{format(new Date(sensor.timestamp), 'PPpp')}</TableCell>
+              {(onEditSensor || onDeleteSensor) && (
+                <TableCell className="text-right">
+                  {onEditSensor && (
+                    <Button variant="ghost" size="icon" onClick={() => onEditSensor(sensor)} className="mr-2">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {onDeleteSensor && (
+                    <Button variant="ghost" size="icon" onClick={() => onDeleteSensor(sensor)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>
