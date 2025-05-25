@@ -1,5 +1,5 @@
-import type { SensorData, SensorReading } from '@/types';
-import { subMinutes, format } from 'date-fns';
+import type { SensorData } from '@/types'; // Removed SensorReading import
+import { subMinutes } from 'date-fns'; // Removed format import
 
 const SENSOR_NAMES = [
   'Alpha-001', 'Bravo-007', 'Charlie-113', 'Delta-224', 'Echo-5', 
@@ -34,20 +34,4 @@ export function generateSensorData(count: number): SensorData[] {
   return data;
 }
 
-export function generateHistoricalData(sensorId: string, points: number): SensorReading[] {
-  const data: SensorReading[] = [];
-  const now = new Date();
-  let currentValue = Math.random() * 50 + 25; // Start with a baseline value
-
-  for (let i = 0; i < points; i++) {
-    const timestamp = subMinutes(now, (points - 1 - i) * 5); // Data points every 5 minutes
-    currentValue += (Math.random() - 0.5) * 5; // Fluctuate value
-    currentValue = Math.max(0, Math.min(100, currentValue)); // Clamp between 0 and 100
-
-    data.push({
-      timestamp: format(timestamp, 'HH:mm'), // Format for XAxis display
-      value: parseFloat(currentValue.toFixed(2)),
-    });
-  }
-  return data;
-}
+// generateHistoricalData function removed as it's no longer used

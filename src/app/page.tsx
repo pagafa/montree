@@ -18,9 +18,8 @@ import AppLogo from '@/components/AppLogo';
 import SettingsPanel from '@/components/settings/SettingsPanel';
 import SummarySection from '@/components/dashboard/SummarySection';
 import SensorDataTable from '@/components/dashboard/SensorDataTable';
-import SensorTimeSeriesChart from '@/components/dashboard/SensorTimeSeriesChart';
-import { generateSensorData, generateHistoricalData } from '@/lib/mock-data';
-import type { SensorData, SensorReading } from '@/types';
+import { generateSensorData } from '@/lib/mock-data';
+import type { SensorData } from '@/types';
 import { Home, BarChart3, TableIcon, Settings, PanelLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -33,15 +32,11 @@ const SidebarLogoWrapper = () => {
 
 export default function DashboardPage() {
   const [sensorData, setSensorData] = useState<SensorData[]>([]);
-  const [historicalData, setHistoricalData] = useState<SensorReading[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const sData = generateSensorData(10);
     setSensorData(sData);
-    if (sData.length > 0) {
-      setHistoricalData(generateHistoricalData(sData[0].id, 50));
-    }
     setIsLoading(false);
   }, []);
 
@@ -94,8 +89,8 @@ export default function DashboardPage() {
         </header>
         <main className="flex flex-1 flex-col gap-6 p-4 sm:px-6 md:gap-8">
           <SummarySection sensorData={sensorData} />
-          <div className="grid auto-rows-max items-start gap-6 md:gap-8 lg:grid-cols-3">
-            <Card className="lg:col-span-2 shadow-md rounded-lg">
+          <div className="grid auto-rows-max items-start gap-6 md:gap-8 lg:grid-cols-1"> {/* Changed grid to single column */}
+            <Card className="lg:col-span-1 shadow-md rounded-lg"> {/* Changed col-span to 1 */}
               <CardHeader>
                 <CardTitle>All Sensors</CardTitle>
                 <CardDescription>Live overview of all connected sensor devices.</CardDescription>
@@ -104,21 +99,7 @@ export default function DashboardPage() {
                 <SensorDataTable data={sensorData} />
               </CardContent>
             </Card>
-            <Card className="lg:col-span-1 shadow-md rounded-lg">
-              <CardHeader>
-                <CardTitle>Device Activity Trend</CardTitle>
-                <CardDescription>
-                  {sensorData.length > 0 ? `Time series for ${sensorData[0].name}` : 'No sensor data available'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {sensorData.length > 0 && historicalData.length > 0 ? (
-                  <SensorTimeSeriesChart data={historicalData} sensorName={sensorData[0].name} />
-                ) : (
-                  <p className="text-sm text-muted-foreground">No historical data to display chart.</p>
-                )}
-              </CardContent>
-            </Card>
+            {/* SensorTimeSeriesChart and its Card removed */}
           </div>
         </main>
       </SidebarInset>

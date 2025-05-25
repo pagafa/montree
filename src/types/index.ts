@@ -8,10 +8,7 @@ export interface SensorData {
   location: string;
 }
 
-export interface SensorReading {
-  timestamp: string; // Store as string for chart compatibility e.g. "HH:mm:ss" or "MMM dd"
-  value: number;
-}
+// SensorReading interface removed as it's no longer used
 
 export interface DisplayConfig {
   theme: 'light' | 'dark' | 'system';
