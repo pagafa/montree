@@ -26,7 +26,7 @@ const SensorTypeIcon: FC<{ type: SensorData['type'] }> = ({ type }) => {
     Light: Lightbulb,
     Motion: Zap,
     Generic: AlertCircle,
-    CO2: AlertCircle, // Assuming CO2 can use a generic icon for now
+    CO2: AlertCircle,
   };
   const IconComponent = icons[type] || AlertCircle;
   return <IconComponent className="h-4 w-4 mr-2 inline-block" />;
@@ -55,23 +55,19 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data, onEditSensor, onDelet
             <TableHead>Device</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Type</TableHead>
-            <TableHead>Channel</TableHead> {/* Added Channel header */}
+            <TableHead>Channel</TableHead>
             {(onEditSensor || onDeleteSensor) && <TableHead className="text-right w-[120px]">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedData.map((sensor) => (
-            <TableRow key={sensor.id}>
-              <TableCell className="font-medium">
+            <TableRow key={sensor.id}><TableCell className="font-medium">
                 <HardDrive className="h-4 w-4 mr-2 inline-block text-muted-foreground" />
                 {sensor.device}
-              </TableCell>
-              <TableCell>{sensor.name}</TableCell>
-              <TableCell>
+              </TableCell><TableCell>{sensor.name}</TableCell><TableCell>
                 <SensorTypeIcon type={sensor.type} />
                 {sensor.type}
-              </TableCell>
-              <TableCell> {/* Added Channel cell */}
+              </TableCell><TableCell>
                 <TvMinimal className="h-4 w-4 mr-2 inline-block text-muted-foreground" />
                 {sensor.channel}
               </TableCell>
