@@ -18,7 +18,7 @@ import { HardDrive, PlusCircle, Pencil, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const deviceFormSchema = z.object({
-  id: z.string().min(1, "Device ID is required"),
+  userVisibleId: z.string().min(1, "Device ID is required"),
   name: z.string().min(1, "Device name is required"),
 });
 type DeviceFormValues = z.infer<typeof deviceFormSchema>;
@@ -34,7 +34,7 @@ export default function DevicesPage() {
 
   const form = useForm<DeviceFormValues>({
     resolver: zodResolver(deviceFormSchema),
-    defaultValues: { id: '', name: '' },
+    defaultValues: { userVisibleId: '', name: '' },
   });
 
   useEffect(() => {
@@ -43,13 +43,16 @@ export default function DevicesPage() {
   }, []);
 
   const handleAddDevice = () => {
-    form.reset({ id: crypto.randomUUID(), name: '' }); // Pre-fill with a new UUID, but make it editable
+    form.reset({ 
+      userVisibleId: `DEV-${(devices.length + 1).toString().padStart(3, '0')}`, 
+      name: '' 
+    });
     setIsAddDialogOpen(true);
   };
 
   const handleEditDevice = (device: ManagedDevice) => {
     setCurrentDevice(device);
-    form.reset({ id: device.id, name: device.name });
+    form.reset({ userVisibleId: device.userVisibleId, name: device.name });
     setIsEditDialogOpen(true);
   };
 
@@ -59,12 +62,15 @@ export default function DevicesPage() {
   };
 
   const onAddSubmit = (data: DeviceFormValues) => {
-    // Check for ID uniqueness before adding
-    if (devices.some(device => device.id === data.id)) {
-      form.setError("id", { type: "manual", message: "This ID already exists. Please use a unique ID." });
+    if (devices.some(device => device.userVisibleId === data.userVisibleId)) {
+      form.setError("userVisibleId", { type: "manual", message: "This Device ID already exists. Please use a unique ID." });
       return;
     }
-    const newDevice: ManagedDevice = { id: data.id, name: data.name };
+    const newDevice: ManagedDevice = { 
+      id: crypto.randomUUID(), // System-generated immutable ID
+      userVisibleId: data.userVisibleId, 
+      name: data.name 
+    };
     setDevices(prev => [newDevice, ...prev].sort((a,b) => a.name.localeCompare(b.name)));
     setIsAddDialogOpen(false);
     toast({ title: "Device Added", description: `Device "${data.name}" has been added.` });
@@ -72,12 +78,12 @@ export default function DevicesPage() {
 
   const onEditSubmit = (data: DeviceFormValues) => {
     if (currentDevice) {
-      // Check for ID uniqueness if ID was changed
-      if (data.id !== currentDevice.id && devices.some(device => device.id === data.id)) {
-        form.setError("id", { type: "manual", message: "This ID already exists. Please use a unique ID." });
+      // Check for userVisibleId uniqueness if it was changed
+      if (data.userVisibleId !== currentDevice.userVisibleId && devices.some(device => device.userVisibleId === data.userVisibleId)) {
+        form.setError("userVisibleId", { type: "manual", message: "This Device ID already exists. Please use a unique ID." });
         return;
       }
-      setDevices(prev => prev.map(d => d.id === currentDevice.id ? { ...data } : d).sort((a,b) => a.name.localeCompare(b.name)));
+      setDevices(prev => prev.map(d => d.id === currentDevice.id ? { ...currentDevice, userVisibleId: data.userVisibleId, name: data.name } : d).sort((a,b) => a.name.localeCompare(b.name)));
       setIsEditDialogOpen(false);
       toast({ title: "Device Updated", description: `Device "${data.name}" has been updated.` });
     }
@@ -113,7 +119,7 @@ export default function DevicesPage() {
         <CardHeader>
           <CardTitle>All Registered Devices</CardTitle>
           <CardDescription>
-            List of all devices. IDs can be edited. Changes are client-side and will be lost on refresh.
+            List of all devices. The "Device ID" is user-editable. Changes are client-side and will be lost on refresh.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -129,8 +135,8 @@ export default function DevicesPage() {
                 </TableHeader>
                 <TableBody>
                   {devices.map((device) => (
-                    <TableRow key={device.id}>
-                       <TableCell className="font-mono text-xs">{device.id}</TableCell>
+                    <TableRow key={device.id}> {/* Use internal system ID for key */}
+                       <TableCell className="font-mono text-xs">{device.userVisibleId}</TableCell>
                       <TableCell className="font-medium">
                         <HardDrive className="h-4 w-4 mr-2 inline-block text-muted-foreground" />
                         {device.name}
@@ -162,9 +168,9 @@ export default function DevicesPage() {
           </DialogHeader>
           <form onSubmit={form.handleSubmit(onAddSubmit)} className="space-y-4">
             <div>
-              <Label htmlFor="deviceId">Device ID</Label>
-              <Input id="deviceId" {...form.register("id")} />
-              {form.formState.errors.id && <p className="text-sm text-destructive mt-1">{form.formState.errors.id.message}</p>}
+              <Label htmlFor="userVisibleDeviceId">Device ID</Label>
+              <Input id="userVisibleDeviceId" {...form.register("userVisibleId")} />
+              {form.formState.errors.userVisibleId && <p className="text-sm text-destructive mt-1">{form.formState.errors.userVisibleId.message}</p>}
             </div>
             <div>
               <Label htmlFor="deviceName">Device Name</Label>
@@ -189,14 +195,14 @@ export default function DevicesPage() {
           </DialogHeader>
           <form onSubmit={form.handleSubmit(onEditSubmit)} className="space-y-4">
              <div>
-              <Label htmlFor="editDeviceId">Device ID</Label>
-              <Input id="editDeviceId" {...form.register("id")} />
-              {form.formState.errors.id && <p className="text-sm text-destructive mt-1">{form.formState.errors.id.message}</p>}
+              <Label htmlFor="editUserVisibleDeviceId">Device ID</Label>
+              <Input id="editUserVisibleDeviceId" {...form.register("userVisibleId")} />
+              {form.formState.errors.userVisibleId && <p className="text-sm text-destructive mt-1">{form.formState.errors.userVisibleId.message}</p>}
             </div>
             <div>
               <Label htmlFor="editDeviceName">Device Name</Label>
               <Input id="editDeviceName" {...form.register("name")} />
-              {form.formState.errors.name && <p className="text-sm text-destructive mt-1">{form.formMState.errors.name.message}</p>}
+              {form.formState.errors.name && <p className="text-sm text-destructive mt-1">{form.formState.errors.name.message}</p>}
             </div>
             <DialogFooter>
               <DialogClose asChild>

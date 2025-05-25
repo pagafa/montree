@@ -37,8 +37,9 @@ export function generateSensorData(count: number): SensorData[] {
 }
 
 export function generateInitialDeviceList(): ManagedDevice[] {
-  return DEVICE_NAMES_ARRAY.map(name => ({
-    id: crypto.randomUUID(),
+  return DEVICE_NAMES_ARRAY.map((name, index) => ({
+    id: crypto.randomUUID(), // Internal system ID
+    userVisibleId: `DEV-${(index + 1).toString().padStart(3, '0')}`, // User-facing, editable ID
     name,
   }));
 }

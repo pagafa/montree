@@ -16,6 +16,7 @@ export interface DisplayConfig {
 
 // For managing devices on the devices page
 export interface ManagedDevice {
-  id: string;
+  id: string; // System-generated, immutable UUID
+  userVisibleId: string; // User-editable identifier, labeled as "Device ID" in UI
   name: string;
 }
