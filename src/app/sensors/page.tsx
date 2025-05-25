@@ -22,7 +22,7 @@ const sensorFormSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, "Sensor name is required"),
   type: z.enum(SENSOR_TYPES_ARRAY),
-  channel: z.coerce.number().int().min(0, "Channel must be a non-negative integer"),
+  channel: z.coerce.number().int().min(1, "Channel must be between 1 and 8").max(8, "Channel must be between 1 and 8"),
   value: z.coerce.number().min(0, "Value must be non-negative"), // Kept for 'add' mode validation
   unit: z.string().min(1, "Unit is required"), // Kept for 'add' mode validation
   device: z.string().min(1, "Device assignment is required"),
@@ -75,7 +75,7 @@ export default function SensorsPage() {
         id: undefined,
         name: SENSOR_NAMES_ARRAY[Math.floor(Math.random() * SENSOR_NAMES_ARRAY.length)],
         type: initialType,
-        channel: 0, // Default channel
+        channel: 1, // Default channel to 1
         value: 0,
         unit: UNITS_OPTIONS[initialType],
         device: DEVICE_NAMES_ARRAY[0],
@@ -220,7 +220,7 @@ export default function SensorsPage() {
             </div>
 
             <div>
-              <Label htmlFor="sensorChannel">Channel</Label>
+              <Label htmlFor="sensorChannel">Channel (1-8)</Label>
               <Input id="sensorChannel" type="number" {...form.register("channel")} />
               {form.formState.errors.channel && <p className="text-sm text-destructive mt-1">{form.formState.errors.channel.message}</p>}
             </div>
@@ -287,3 +287,4 @@ export default function SensorsPage() {
     </AppLayout>
   );
 }
+
