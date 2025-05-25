@@ -53,7 +53,6 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data, onEditSensor, onDelet
             <TableHead>Device</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Type</TableHead>
-            <TableHead>Unit</TableHead>
             <TableHead>Last Update</TableHead>
             {(onEditSensor || onDeleteSensor) && <TableHead className="text-right w-[120px]">Actions</TableHead>}
           </TableRow>
@@ -70,7 +69,6 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data, onEditSensor, onDelet
                 <SensorTypeIcon type={sensor.type} />
                 {sensor.type}
               </TableCell>
-              <TableCell>{sensor.unit}</TableCell>
               <TableCell>{format(new Date(sensor.timestamp), 'PPpp')}</TableCell>
               {(onEditSensor || onDeleteSensor) && (
                 <TableCell className="text-right">
