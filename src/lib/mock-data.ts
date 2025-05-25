@@ -1,12 +1,12 @@
-import type { SensorData } from '@/types'; // Removed SensorReading import
-import { subMinutes } from 'date-fns'; // Removed format import
+import type { SensorData } from '@/types';
+import { subMinutes } from 'date-fns';
 
 const SENSOR_NAMES = [
   'Alpha-001', 'Bravo-007', 'Charlie-113', 'Delta-224', 'Echo-5', 
   'Foxtrot-99', 'Golf-747', 'Hotel-California', 'India-One', 'Juliet-Rose'
 ];
 const SENSOR_TYPES: SensorData['type'][] = ['Temperature', 'Humidity', 'Pressure', 'Light', 'Motion', 'Generic'];
-const LOCATIONS = ['Server Room A', 'Lobby', 'Warehouse Section 3', 'Office 201', 'Rooftop Unit'];
+const DEVICE_NAMES = ['Thermostat-LivingRoom', 'Sensor-Backdoor', 'Monitor-Warehouse', 'LightSwitch-Office', 'WeatherStation-Rooftop']; // Changed from LOCATIONS
 const UNITS: { [key in SensorData['type']]: string } = {
   Temperature: '°C',
   Humidity: '%',
@@ -28,10 +28,8 @@ export function generateSensorData(count: number): SensorData[] {
       value: parseFloat((Math.random() * 100).toFixed(2)),
       unit: UNITS[type],
       timestamp: subMinutes(now, Math.floor(Math.random() * 60)),
-      location: LOCATIONS[i % LOCATIONS.length],
+      device: DEVICE_NAMES[i % DEVICE_NAMES.length], // Changed from location to device
     });
   }
   return data;
 }
-
-// generateHistoricalData function removed as it's no longer used

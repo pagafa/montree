@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/table';
 import type { SensorData } from '@/types';
 import { format } from 'date-fns';
-import { Thermometer, Zap, Droplets, Gauge, LucideIcon, Lightbulb, Wind, AlertCircle } from 'lucide-react';
+import { Thermometer, Zap, Droplets, Gauge, LucideIcon, Lightbulb, AlertCircle } from 'lucide-react'; // Removed Wind icon
 
 interface SensorDataTableProps {
   data: SensorData[];
@@ -40,7 +40,7 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data }) => {
             <TableHead>Name</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Value</TableHead>
-            <TableHead>Location</TableHead>
+            <TableHead>Device</TableHead> {/* Changed from Location to Device */}
             <TableHead>Last Update</TableHead>
           </TableRow>
         </TableHeader>
@@ -53,7 +53,7 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data }) => {
                 {sensor.type}
               </TableCell>
               <TableCell>{sensor.value} {sensor.unit}</TableCell>
-              <TableCell>{sensor.location}</TableCell>
+              <TableCell>{sensor.device}</TableCell> {/* Changed from sensor.location to sensor.device */}
               <TableCell>{format(new Date(sensor.timestamp), 'PPpp')}</TableCell>
             </TableRow>
           ))}

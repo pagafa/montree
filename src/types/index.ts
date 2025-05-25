@@ -5,10 +5,8 @@ export interface SensorData {
   value: number;
   unit: string;
   timestamp: Date;
-  location: string;
+  device: string; // Changed from location to device
 }
-
-// SensorReading interface removed as it's no longer used
 
 export interface DisplayConfig {
   theme: 'light' | 'dark' | 'system';
