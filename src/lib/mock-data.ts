@@ -28,6 +28,7 @@ export function generateSensorData(count: number): SensorData[] {
       id: crypto.randomUUID(),
       name: SENSOR_NAMES_ARRAY[i % SENSOR_NAMES_ARRAY.length],
       type,
+      channel: Math.floor(Math.random() * 3), // Assign a channel from 0, 1, or 2
       value: parseFloat((Math.random() * 100).toFixed(2)),
       unit: UNITS[type],
       timestamp: subMinutes(now, Math.floor(Math.random() * 60)),

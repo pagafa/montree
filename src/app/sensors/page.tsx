@@ -22,6 +22,7 @@ const sensorFormSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, "Sensor name is required"),
   type: z.enum(SENSOR_TYPES_ARRAY),
+  channel: z.coerce.number().int().min(0, "Channel must be a non-negative integer"),
   value: z.coerce.number().min(0, "Value must be non-negative"), // Kept for 'add' mode validation
   unit: z.string().min(1, "Unit is required"), // Kept for 'add' mode validation
   device: z.string().min(1, "Device assignment is required"),
@@ -34,7 +35,8 @@ const UNITS_OPTIONS: { [key in SensorData['type']]: string } = {
   Pressure: 'hPa',
   Light: 'lux',
   Motion: 'detections',
-  Generic: 'units'
+  Generic: 'units',
+  CO2: 'ppm'
 };
 
 export default function SensorsPage() {
@@ -62,6 +64,7 @@ export default function SensorsPage() {
         id: currentSensor.id,
         name: currentSensor.name,
         type: currentSensor.type,
+        channel: currentSensor.channel,
         value: currentSensor.value, // Set for form state, but field will be hidden
         unit: currentSensor.unit,   // Set for form state, but field will be hidden
         device: currentSensor.device,
@@ -72,6 +75,7 @@ export default function SensorsPage() {
         id: undefined,
         name: SENSOR_NAMES_ARRAY[Math.floor(Math.random() * SENSOR_NAMES_ARRAY.length)],
         type: initialType,
+        channel: 0, // Default channel
         value: 0,
         unit: UNITS_OPTIONS[initialType],
         device: DEVICE_NAMES_ARRAY[0],
@@ -114,6 +118,7 @@ export default function SensorsPage() {
         id: crypto.randomUUID(),
         name: data.name,
         type: data.type,
+        channel: data.channel,
         value: data.value,
         unit: data.unit, // Unit from form (which was updated by watchedType)
         device: data.device,
@@ -129,6 +134,7 @@ export default function SensorsPage() {
           id: currentSensor.id,
           name: data.name,
           type: data.type,
+          channel: data.channel,
           device: data.device,
           unit: newUnit, // Update unit if type changed, otherwise preserve
         };
@@ -211,6 +217,12 @@ export default function SensorsPage() {
                 />
                  {form.formState.errors.type && <p className="text-sm text-destructive mt-1">{form.formState.errors.type.message}</p>}
               </div>
+            </div>
+
+            <div>
+              <Label htmlFor="sensorChannel">Channel</Label>
+              <Input id="sensorChannel" type="number" {...form.register("channel")} />
+              {form.formState.errors.channel && <p className="text-sm text-destructive mt-1">{form.formState.errors.channel.message}</p>}
             </div>
             
             {dialogMode === 'add' && ( // Only show Value and Unit fields for 'add' mode

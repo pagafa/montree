@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import type { SensorData } from '@/types';
-import { Thermometer, Zap, Droplets, Gauge, LucideIcon, Lightbulb, AlertCircle, HardDrive, Pencil, Trash2 } from 'lucide-react';
+import { Thermometer, Zap, Droplets, Gauge, LucideIcon, Lightbulb, AlertCircle, HardDrive, Pencil, Trash2, TvMinimal } from 'lucide-react'; // Added TvMinimal for Channel
 
 interface SensorDataTableProps {
   data: SensorData[];
@@ -26,6 +26,7 @@ const SensorTypeIcon: FC<{ type: SensorData['type'] }> = ({ type }) => {
     Light: Lightbulb,
     Motion: Zap,
     Generic: AlertCircle,
+    CO2: AlertCircle, // Assuming CO2 can use a generic icon for now
   };
   const IconComponent = icons[type] || AlertCircle;
   return <IconComponent className="h-4 w-4 mr-2 inline-block" />;
@@ -41,6 +42,8 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data, onEditSensor, onDelet
     if (a.device.toLowerCase() > b.device.toLowerCase()) return 1;
     if (a.name.toLowerCase() < b.name.toLowerCase()) return -1;
     if (a.name.toLowerCase() > b.name.toLowerCase()) return 1;
+    if (a.channel < b.channel) return -1;
+    if (a.channel > b.channel) return 1;
     return 0;
   });
 
@@ -52,6 +55,7 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data, onEditSensor, onDelet
             <TableHead>Device</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Type</TableHead>
+            <TableHead>Channel</TableHead> {/* Added Channel header */}
             {(onEditSensor || onDeleteSensor) && <TableHead className="text-right w-[120px]">Actions</TableHead>}
           </TableRow>
         </TableHeader>
@@ -66,6 +70,10 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data, onEditSensor, onDelet
               <TableCell>
                 <SensorTypeIcon type={sensor.type} />
                 {sensor.type}
+              </TableCell>
+              <TableCell> {/* Added Channel cell */}
+                <TvMinimal className="h-4 w-4 mr-2 inline-block text-muted-foreground" />
+                {sensor.channel}
               </TableCell>
               {(onEditSensor || onDeleteSensor) && (
                 <TableCell className="text-right">

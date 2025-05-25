@@ -3,6 +3,7 @@ export interface SensorData {
   id: string;
   name: string;
   type: 'Temperature' | 'Humidity' | 'Pressure' | 'Light' | 'Motion' | 'Generic' | 'CO2';
+  channel: number; // Added channel
   value: number; // Current/last known value, used for 'add sensor' form
   unit: string;  // Unit corresponding to the type, used for 'add sensor' form
   timestamp: Date; // Last update timestamp
