@@ -22,8 +22,8 @@ const sensorFormSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, "Sensor name is required"),
   type: z.enum(SENSOR_TYPES_ARRAY),
-  value: z.coerce.number().min(0, "Value must be non-negative"),
-  unit: z.string().min(1, "Unit is required"),
+  value: z.coerce.number().min(0, "Value must be non-negative"), // Kept for 'add' mode validation
+  unit: z.string().min(1, "Unit is required"), // Kept for 'add' mode validation
   device: z.string().min(1, "Device assignment is required"),
 });
 type SensorFormValues = z.infer<typeof sensorFormSchema>;
@@ -62,26 +62,28 @@ export default function SensorsPage() {
         id: currentSensor.id,
         name: currentSensor.name,
         type: currentSensor.type,
-        value: currentSensor.value,
-        unit: currentSensor.unit,
+        value: currentSensor.value, // Set for form state, but field will be hidden
+        unit: currentSensor.unit,   // Set for form state, but field will be hidden
         device: currentSensor.device,
       });
-    } else {
+    } else { // Add mode
+      const initialType = SENSOR_TYPES_ARRAY[0];
       form.reset({
         id: undefined,
-        name: SENSOR_NAMES_ARRAY[Math.floor(Math.random() * SENSOR_NAMES_ARRAY.length)], // Default name
-        type: SENSOR_TYPES_ARRAY[0],
+        name: SENSOR_NAMES_ARRAY[Math.floor(Math.random() * SENSOR_NAMES_ARRAY.length)],
+        type: initialType,
         value: 0,
-        unit: UNITS_OPTIONS[SENSOR_TYPES_ARRAY[0]],
+        unit: UNITS_OPTIONS[initialType],
         device: DEVICE_NAMES_ARRAY[0],
       });
     }
   }, [isFormDialogOpen, dialogMode, currentSensor, form]);
 
-  // Update unit when type changes
   const watchedType = form.watch("type");
   useEffect(() => {
     if (watchedType) {
+      // This will update the unit in the form state if the type changes.
+      // For "edit" mode, onSubmit will decide whether to use this new unit or preserve the old one.
       form.setValue("unit", UNITS_OPTIONS[watchedType]);
     }
   }, [watchedType, form]);
@@ -105,18 +107,36 @@ export default function SensorsPage() {
   };
 
   const onSubmit = (data: SensorFormValues) => {
-    const newSensorData = {
-      ...data,
-      id: dialogMode === 'add' ? crypto.randomUUID() : currentSensor!.id,
-      timestamp: new Date(), // Update timestamp on edit/add
-    } as SensorData;
+    let updatedSensorData: SensorData;
 
     if (dialogMode === 'add') {
-      setSensorData(prev => [newSensorData, ...prev]);
+      updatedSensorData = {
+        id: crypto.randomUUID(),
+        name: data.name,
+        type: data.type,
+        value: data.value,
+        unit: data.unit, // Unit from form (which was updated by watchedType)
+        device: data.device,
+        timestamp: new Date(), 
+      };
+      setSensorData(prev => [updatedSensorData, ...prev]);
       toast({ title: "Sensor Added", description: `Sensor "${data.name}" has been added.` });
-    } else {
-      setSensorData(prev => prev.map(s => s.id === currentSensor!.id ? newSensorData : s));
-      toast({ title: "Sensor Updated", description: `Sensor "${data.name}" has been updated.` });
+    } else { // dialogMode === 'edit'
+      if (currentSensor) {
+        const newUnit = data.type === currentSensor.type ? currentSensor.unit : UNITS_OPTIONS[data.type];
+        updatedSensorData = {
+          ...currentSensor, // Preserve original value, timestamp
+          id: currentSensor.id,
+          name: data.name,
+          type: data.type,
+          device: data.device,
+          unit: newUnit, // Update unit if type changed, otherwise preserve
+        };
+        setSensorData(prev => prev.map(s => s.id === currentSensor!.id ? updatedSensorData : s));
+        toast({ title: "Sensor Updated", description: `Sensor "${data.name}" has been updated.` });
+      } else {
+        return; 
+      }
     }
     setIsFormDialogOpen(false);
   };
@@ -192,18 +212,23 @@ export default function SensorsPage() {
                  {form.formState.errors.type && <p className="text-sm text-destructive mt-1">{form.formState.errors.type.message}</p>}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="sensorValue">Value</Label>
-                <Input id="sensorValue" type="number" step="0.01" {...form.register("value")} />
-                {form.formState.errors.value && <p className="text-sm text-destructive mt-1">{form.formState.errors.value.message}</p>}
+            
+            {dialogMode === 'add' && ( // Only show Value and Unit fields for 'add' mode
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="sensorValue">Value</Label>
+                  <Input id="sensorValue" type="number" step="0.01" {...form.register("value")} />
+                  {form.formState.errors.value && <p className="text-sm text-destructive mt-1">{form.formState.errors.value.message}</p>}
+                </div>
+                <div>
+                  <Label htmlFor="sensorUnit">Unit</Label>
+                  {/* Unit is readOnly as it's derived, but still part of the form for 'add' mode */}
+                  <Input id="sensorUnit" {...form.register("unit")} readOnly className="bg-muted/50" />
+                   {form.formState.errors.unit && <p className="text-sm text-destructive mt-1">{form.formState.errors.unit.message}</p>}
+                </div>
               </div>
-              <div>
-                <Label htmlFor="sensorUnit">Unit</Label>
-                <Input id="sensorUnit" {...form.register("unit")} readOnly className="bg-muted/50" />
-                 {form.formState.errors.unit && <p className="text-sm text-destructive mt-1">{form.formState.errors.unit.message}</p>}
-              </div>
-            </div>
+            )}
+
              <div>
               <Label htmlFor="sensorDevice">Device</Label>
               <Controller
