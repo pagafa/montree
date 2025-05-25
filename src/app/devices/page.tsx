@@ -18,6 +18,7 @@ import { HardDrive, PlusCircle, Pencil, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const deviceFormSchema = z.object({
+  id: z.string().min(1, "Device ID is required"),
   name: z.string().min(1, "Device name is required"),
 });
 type DeviceFormValues = z.infer<typeof deviceFormSchema>;
@@ -33,7 +34,7 @@ export default function DevicesPage() {
 
   const form = useForm<DeviceFormValues>({
     resolver: zodResolver(deviceFormSchema),
-    defaultValues: { name: '' },
+    defaultValues: { id: '', name: '' },
   });
 
   useEffect(() => {
@@ -42,13 +43,13 @@ export default function DevicesPage() {
   }, []);
 
   const handleAddDevice = () => {
-    form.reset({ name: '' });
+    form.reset({ id: crypto.randomUUID(), name: '' }); // Pre-fill with a new UUID, but make it editable
     setIsAddDialogOpen(true);
   };
 
   const handleEditDevice = (device: ManagedDevice) => {
     setCurrentDevice(device);
-    form.reset({ name: device.name });
+    form.reset({ id: device.id, name: device.name });
     setIsEditDialogOpen(true);
   };
 
@@ -58,7 +59,12 @@ export default function DevicesPage() {
   };
 
   const onAddSubmit = (data: DeviceFormValues) => {
-    const newDevice: ManagedDevice = { id: crypto.randomUUID(), name: data.name };
+    // Check for ID uniqueness before adding
+    if (devices.some(device => device.id === data.id)) {
+      form.setError("id", { type: "manual", message: "This ID already exists. Please use a unique ID." });
+      return;
+    }
+    const newDevice: ManagedDevice = { id: data.id, name: data.name };
     setDevices(prev => [newDevice, ...prev].sort((a,b) => a.name.localeCompare(b.name)));
     setIsAddDialogOpen(false);
     toast({ title: "Device Added", description: `Device "${data.name}" has been added.` });
@@ -66,7 +72,12 @@ export default function DevicesPage() {
 
   const onEditSubmit = (data: DeviceFormValues) => {
     if (currentDevice) {
-      setDevices(prev => prev.map(d => d.id === currentDevice.id ? { ...d, name: data.name } : d).sort((a,b) => a.name.localeCompare(b.name)));
+      // Check for ID uniqueness if ID was changed
+      if (data.id !== currentDevice.id && devices.some(device => device.id === data.id)) {
+        form.setError("id", { type: "manual", message: "This ID already exists. Please use a unique ID." });
+        return;
+      }
+      setDevices(prev => prev.map(d => d.id === currentDevice.id ? { ...data } : d).sort((a,b) => a.name.localeCompare(b.name)));
       setIsEditDialogOpen(false);
       toast({ title: "Device Updated", description: `Device "${data.name}" has been updated.` });
     }
@@ -102,7 +113,7 @@ export default function DevicesPage() {
         <CardHeader>
           <CardTitle>All Registered Devices</CardTitle>
           <CardDescription>
-            List of all devices. Changes are client-side and will be lost on refresh.
+            List of all devices. IDs can be edited. Changes are client-side and will be lost on refresh.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -111,6 +122,7 @@ export default function DevicesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Device ID</TableHead>
                     <TableHead>Device Name</TableHead>
                     <TableHead className="text-right w-[120px]">Actions</TableHead>
                   </TableRow>
@@ -118,6 +130,7 @@ export default function DevicesPage() {
                 <TableBody>
                   {devices.map((device) => (
                     <TableRow key={device.id}>
+                       <TableCell className="font-mono text-xs">{device.id}</TableCell>
                       <TableCell className="font-medium">
                         <HardDrive className="h-4 w-4 mr-2 inline-block text-muted-foreground" />
                         {device.name}
@@ -149,6 +162,11 @@ export default function DevicesPage() {
           </DialogHeader>
           <form onSubmit={form.handleSubmit(onAddSubmit)} className="space-y-4">
             <div>
+              <Label htmlFor="deviceId">Device ID</Label>
+              <Input id="deviceId" {...form.register("id")} />
+              {form.formState.errors.id && <p className="text-sm text-destructive mt-1">{form.formState.errors.id.message}</p>}
+            </div>
+            <div>
               <Label htmlFor="deviceName">Device Name</Label>
               <Input id="deviceName" {...form.register("name")} />
               {form.formState.errors.name && <p className="text-sm text-destructive mt-1">{form.formState.errors.name.message}</p>}
@@ -170,10 +188,15 @@ export default function DevicesPage() {
             <DialogTitle>Edit Device</DialogTitle>
           </DialogHeader>
           <form onSubmit={form.handleSubmit(onEditSubmit)} className="space-y-4">
+             <div>
+              <Label htmlFor="editDeviceId">Device ID</Label>
+              <Input id="editDeviceId" {...form.register("id")} />
+              {form.formState.errors.id && <p className="text-sm text-destructive mt-1">{form.formState.errors.id.message}</p>}
+            </div>
             <div>
               <Label htmlFor="editDeviceName">Device Name</Label>
               <Input id="editDeviceName" {...form.register("name")} />
-              {form.formState.errors.name && <p className="text-sm text-destructive mt-1">{form.formState.errors.name.message}</p>}
+              {form.formState.errors.name && <p className="text-sm text-destructive mt-1">{form.formMState.errors.name.message}</p>}
             </div>
             <DialogFooter>
               <DialogClose asChild>
