@@ -10,11 +10,6 @@ export interface SensorData {
   deviceId: string; // System ID of the device
 }
 
-export interface DisplayConfig {
-  theme: 'light' | 'dark' | 'system';
-  // Add other configuration options here
-}
-
 // For managing devices on the devices page
 export interface ManagedDevice {
   id: string; // System-generated, immutable UUID
