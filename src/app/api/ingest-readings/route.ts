@@ -2,7 +2,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { z } from 'zod';
-import { SENSOR_TYPES_ARRAY } from '@/lib/mock-data'; // Used for validating sensor types conceptually
+import { SENSOR_TYPES_ARRAY } from '@/lib/mock-data'; 
 import { revalidatePath } from 'next/cache';
 
 const logFailedRequest = (
@@ -38,6 +38,8 @@ const logFailedRequest = (
 const MetricReadingSchema = z.object({
   channel: z.coerce.number().int().min(1, "Channel must be 1-8").max(8, "Channel must be 1-8"),
   iso_timestamp: z.string().datetime({ message: "Invalid iso_timestamp format for reading. Expected ISO 8601 datetime string." }),
+  timestamp: z.number().optional(), // Numeric timestamp from payload
+  sensor_type: z.string().optional(), // e.g., "SCD30", "LTR329"
   temperature: z.number().optional(),
   humidity: z.number().optional(),
   co2: z.number().optional(),
@@ -50,6 +52,8 @@ const MetricReadingSchema = z.object({
 const IngestPayloadSchema = z.object({
   device_id: z.string().min(1, "device_id is required"), // This is the userVisibleId of the device
   iso_timestamp: z.string().datetime({ message: "Invalid root iso_timestamp format. Expected ISO 8601 datetime string." }),
+  timestamp: z.number().optional(), // Numeric root timestamp from payload
+  time_synchronized: z.boolean().optional(), // time_synchronized from payload
   readings: z.array(MetricReadingSchema).min(1, "At least one reading object is required"),
 });
 
@@ -76,7 +80,7 @@ export async function POST(request: NextRequest) {
 
   if (!validation.success) {
     const errors = validation.error.flatten().fieldErrors;
-    logFailedRequest(request, payload, 'Validation Error', errors, 400, payload.device_id);
+    logFailedRequest(request, payload, 'Validation Error', errors, 400, payload?.device_id);
     return NextResponse.json({ success: false, message: 'Validation failed.', errors: errors }, { status: 400 });
   }
 
@@ -99,15 +103,18 @@ export async function POST(request: NextRequest) {
     let errorsEncountered: { channel: number, metric: string, value?: number, message: string }[] = [];
 
     for (const reading of readings) {
-      const { channel, iso_timestamp: readingTimestamp, ...metrics } = reading;
+      // Destructure known metric fields, and capture the rest (including sensor_type, numeric timestamp)
+      const { channel, iso_timestamp: readingTimestamp, temperature, humidity, co2, ...otherMetrics } = reading;
+      
+      const currentMetricsToProcess: Record<string, number | undefined> = { temperature, humidity, co2 };
 
-      for (const metricKey in metrics) {
-        if (Object.prototype.hasOwnProperty.call(metrics, metricKey) && METRIC_TO_SENSOR_TYPE_MAP[metricKey]) {
+      for (const metricKey in currentMetricsToProcess) {
+        if (Object.prototype.hasOwnProperty.call(currentMetricsToProcess, metricKey) && METRIC_TO_SENSOR_TYPE_MAP[metricKey]) {
           totalMetricsAttempted++;
-          const metricValue = (metrics as any)[metricKey];
+          const metricValue = currentMetricsToProcess[metricKey];
           const sensorTypeInfo = METRIC_TO_SENSOR_TYPE_MAP[metricKey];
 
-          if (metricValue === undefined || metricValue === null) continue; // Skip if metric key is present but value is null/undefined
+          if (metricValue === undefined || metricValue === null) continue;
 
           const sensorStmt = db.prepare('SELECT id, type, unit FROM sensors WHERE deviceId = ? AND channel = ? AND type = ?');
           const sensor = sensorStmt.get(internalDeviceId, channel, sensorTypeInfo.type) as { id: string, type: string, unit: string } | undefined;
@@ -117,25 +124,19 @@ export async function POST(request: NextRequest) {
             continue;
           }
 
-          // Optional: Could add a unit check here if the payload also sent units, or if units needed strict enforcement.
-          // For now, we assume the sensor's registered unit is correct.
-
           const sensorId = sensor.id;
 
           try {
             const insertReadingStmt = db.prepare('INSERT INTO sensor_readings (sensorId, timestamp, value) VALUES (?, ?, ?)');
-            insertReadingStmt.run(sensorId, readingTimestamp, metricValue);
+            insertReadingStmt.run(sensorId, readingTimestamp, metricValue); // Use ISO timestamp from the reading
 
             const updateSensorStmt = db.prepare('UPDATE sensors SET currentValue = ?, lastTimestamp = ? WHERE id = ?');
-            updateSensorStmt.run(metricValue, readingTimestamp, sensorId);
+            updateSensorStmt.run(metricValue, readingTimestamp, sensorId); // Use ISO timestamp from the reading
             
             metricsProcessed++;
           } catch (dbOpError: any) {
              errorsEncountered.push({ channel, metric: metricKey, value: metricValue, message: `DB error for ${sensorTypeInfo.type} on channel ${channel}: ${dbOpError.message}` });
           }
-        } else if (Object.prototype.hasOwnProperty.call(metrics, metricKey)) {
-          // Log unsupported metric keys if necessary, or just ignore them
-          // console.warn(`Unsupported metric key '${metricKey}' in payload for channel ${channel}`);
         }
       }
     }
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (errorsEncountered.length > 0) {
-      const status = metricsProcessed > 0 ? 207 : 400; // 207 Multi-Status if partially successful
+      const status = metricsProcessed > 0 ? 207 : 400; 
       const message = `Processed ${metricsProcessed} out of ${totalMetricsAttempted} metrics. ${errorsEncountered.length} errors occurred.`;
       logFailedRequest(request, payload, 'Partial Ingestion Error / Metric Error', errorsEncountered, status, userVisibleId);
       return NextResponse.json({ 
@@ -163,7 +164,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, message: message }, { status: 400 });
     }
 
-
     return NextResponse.json({ success: true, message: `Successfully processed ${metricsProcessed} metrics for device '${userVisibleId}'.` }, { status: 201 });
 
   } catch (error: any) {
@@ -173,5 +173,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, message: errorMessage }, { status: 500 });
   }
 }
-
-  
