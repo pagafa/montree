@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import type { SensorData } from '@/types';
-import { Thermometer, Zap, Droplets, Gauge, LucideIcon, Lightbulb, AlertCircle, HardDrive, Pencil, Trash2, TvMinimal } from 'lucide-react'; // Added TvMinimal for Channel
+import { Thermometer, Zap, Droplets, Gauge, LucideIcon, Lightbulb, AlertCircle, HardDrive, Pencil, Trash2, TvMinimal } from 'lucide-react';
 
 interface SensorDataTableProps {
   data: SensorData[];
@@ -38,8 +38,8 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data, onEditSensor, onDelet
   }
 
   const sortedData = [...data].sort((a, b) => {
-    if (a.device.toLowerCase() < b.device.toLowerCase()) return -1;
-    if (a.device.toLowerCase() > b.device.toLowerCase()) return 1;
+    if (a.deviceId.toLowerCase() < b.deviceId.toLowerCase()) return -1;
+    if (a.deviceId.toLowerCase() > b.deviceId.toLowerCase()) return 1;
     if (a.name.toLowerCase() < b.name.toLowerCase()) return -1;
     if (a.name.toLowerCase() > b.name.toLowerCase()) return 1;
     if (a.channel < b.channel) return -1;
@@ -52,24 +52,36 @@ const SensorDataTable: FC<SensorDataTableProps> = ({ data, onEditSensor, onDelet
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Device</TableHead>
+            <TableHead>Device ID</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Channel</TableHead>
+            <TableHead>Last Value</TableHead>
+            <TableHead>Last Update</TableHead>
             {(onEditSensor || onDeleteSensor) && <TableHead className="text-right w-[120px]">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedData.map((sensor) => (
-            <TableRow key={sensor.id}><TableCell className="font-medium">
+            <TableRow key={sensor.id}>
+              <TableCell className="font-medium">
                 <HardDrive className="h-4 w-4 mr-2 inline-block text-muted-foreground" />
-                {sensor.device}
-              </TableCell><TableCell>{sensor.name}</TableCell><TableCell>
+                {sensor.deviceId}
+              </TableCell>
+              <TableCell>{sensor.name}</TableCell>
+              <TableCell>
                 <SensorTypeIcon type={sensor.type} />
                 {sensor.type}
-              </TableCell><TableCell>
+              </TableCell>
+              <TableCell>
                 <TvMinimal className="h-4 w-4 mr-2 inline-block text-muted-foreground" />
                 {sensor.channel}
+              </TableCell>
+              <TableCell>
+                {sensor.value !== null ? `${sensor.value} ${sensor.unit}` : 'N/A'}
+              </TableCell>
+              <TableCell>
+                {sensor.timestamp ? sensor.timestamp.toLocaleString() : 'N/A'}
               </TableCell>
               {(onEditSensor || onDeleteSensor) && (
                 <TableCell className="text-right">

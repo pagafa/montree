@@ -2,29 +2,29 @@
 import type { FC } from 'react';
 import type { SensorData } from '@/types';
 import SummaryCard from './SummaryCard';
-import { HardDrive, Cpu } from 'lucide-react'; // Changed Chip to Cpu
+import { HardDrive, Cpu } from 'lucide-react';
 
 interface SummarySectionProps {
   sensorData: SensorData[];
+  deviceCount: number; // Pass total device count directly
 }
 
-const SummarySection: FC<SummarySectionProps> = ({ sensorData }) => {
+const SummarySection: FC<SummarySectionProps> = ({ sensorData, deviceCount }) => {
   const totalSensors = sensorData.length;
-  const uniqueDevices = new Set(sensorData.map(sensor => sensor.device));
-  const numberOfDevices = uniqueDevices.size;
+  // deviceCount is now passed directly as it's fetched independently on dashboard page
   
   return (
-    <div className="grid gap-4 md:grid-cols-2"> {/* Changed to two columns for two cards */}
+    <div className="grid gap-4 md:grid-cols-2">
       <SummaryCard
         title="Total Devices"
-        value={numberOfDevices}
+        value={deviceCount}
         icon={HardDrive}
         description="Number of unique devices"
       />
       <SummaryCard
         title="Total Sensors"
         value={totalSensors}
-        icon={Cpu} // Using Cpu icon for sensors
+        icon={Cpu}
         description="Number of connected sensors"
       />
     </div>
@@ -32,4 +32,3 @@ const SummarySection: FC<SummarySectionProps> = ({ sensorData }) => {
 };
 
 export default SummarySection;
-
