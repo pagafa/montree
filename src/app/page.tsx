@@ -77,40 +77,34 @@ export default function DashboardPage() {
   
   return (
     <AppLayout pageTitle="Dashboard Overview">
-      <Card className="mb-6 shadow-lg rounded-lg border border-border"> {/* Applied shadow-lg and explicit border */}
-        <CardHeader className="pb-3">
-          <div className="flex items-center">
-            <Info className="h-5 w-5 mr-2 text-primary" />
-            <CardTitle className="text-lg">Device Data Ingestion</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Your devices should send their sensor readings via POST request to the following URL:
-          </p>
-          <div className="mt-2 p-3 bg-muted rounded-md">
-            <code className="text-sm font-mono text-foreground break-all">{apiUrl}</code>
-          </div>
-          <p className="text-xs text-muted-foreground mt-3">
-            Ensure the request body is a JSON payload in the format:
-          </p>
-          <pre className="mt-1 p-2 bg-muted/50 rounded-md text-xs font-mono text-foreground overflow-x-auto">
-            {`{
+      {/* Simplified API Information Card */}
+      <Card className="mb-6 shadow-lg rounded-lg border border-border p-4">
+        <div className="flex items-center mb-2">
+          <Info className="h-5 w-5 mr-2 text-primary" />
+          <CardTitle className="text-lg">Device Data Ingestion API</CardTitle>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Your devices should send POST requests to the following URL:
+        </p>
+        <div className="mt-2 p-3 bg-muted rounded-md">
+          <code className="text-sm font-mono text-foreground break-all">{apiUrl}</code>
+        </div>
+        <p className="text-xs text-muted-foreground mt-3">
+          Expected JSON payload format:
+        </p>
+        <pre className="mt-1 p-2 bg-muted/50 rounded-md text-xs font-mono text-foreground overflow-x-auto">
+          {`{
   "device_id": "your-device-userVisibleId",
   "timestamp": "YYYY-MM-DDTHH:mm:ssZ",
   "readings": [
     {"channel": 1, "type": "Temperature", "value": 23.5},
-    {"channel": 1, "type": "CO2", "value": 600},
-    {"channel": 2, "type": "Light", "value": 1200}
+    // ... more readings ...
   ]
 }`}
-          </pre>
-           <p className="text-xs text-muted-foreground mt-3">
-            Note: The \`device_id\` should be the user-visible ID you assign to devices.
-            The \`timestamp\` in the payload is for the batch of readings. Individual sensor readings will be recorded with the server's current time when processed.
-            The \`channel\` field is mandatory for each reading (1-8). Sensor \`type\` should match system types (e.g., "Temperature", "CO2").
-          </p>
-        </CardContent>
+        </pre>
+         <p className="text-xs text-muted-foreground mt-3">
+            Note: \`device_id\` must match a registered device's User Visible ID. \`channel\` is 1-8. \`type\` should be PascalCase (e.g., "Temperature", "CO2").
+        </p>
       </Card>
 
       <SummarySection sensorData={sensorData} deviceCount={devices.length} />
