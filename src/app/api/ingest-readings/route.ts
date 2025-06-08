@@ -68,10 +68,12 @@ const METRIC_TO_SENSOR_TYPE_MAP: Record<string, { type: (typeof SENSOR_TYPES_ARR
 
 export async function POST(request: NextRequest) {
   let payload;
+  let userVisibleIdFromPayload: string | undefined = undefined;
   try {
     payload = await request.json();
+    userVisibleIdFromPayload = payload?.device_id;
   } catch (error) {
-    const errorMessage = 'Invalid JSON payload.';
+    const errorMessage = 'Invalid JSON payload. Please ensure the request body is a well-formed JSON object.';
     logFailedRequest(request, null, 'Invalid JSON', errorMessage, 400);
     return NextResponse.json({ success: false, message: errorMessage }, { status: 400 });
   }
@@ -80,19 +82,19 @@ export async function POST(request: NextRequest) {
 
   if (!validation.success) {
     const errors = validation.error.flatten().fieldErrors;
-    logFailedRequest(request, payload, 'Validation Error', errors, 400, payload?.device_id);
-    return NextResponse.json({ success: false, message: 'Validation failed.', errors: errors }, { status: 400 });
+    const errorMessage = 'Payload validation failed. Please check the structure and data types of your request.';
+    logFailedRequest(request, payload, 'Validation Error', errors, 400, userVisibleIdFromPayload);
+    return NextResponse.json({ success: false, message: errorMessage, errors: errors }, { status: 400 });
   }
 
   const { device_id: userVisibleId, readings } = validation.data;
-  // const batchTimestamp = validation.data.iso_timestamp; // This is the timestamp for the whole batch
 
   try {
     const deviceStmt = db.prepare('SELECT id FROM devices WHERE userVisibleId = ?');
     const device = deviceStmt.get(userVisibleId) as { id: string } | undefined;
 
     if (!device) {
-      const errorMessage = `Device with userVisibleId '${userVisibleId}' not found.`;
+      const errorMessage = `Device with userVisibleId '${userVisibleId}' not found. Please ensure the device is registered.`;
       logFailedRequest(request, payload, 'Device Not Found', errorMessage, 404, userVisibleId);
       return NextResponse.json({ success: false, message: errorMessage }, { status: 404 });
     }
@@ -103,8 +105,7 @@ export async function POST(request: NextRequest) {
     let errorsEncountered: { channel: number, metric: string, value?: number, message: string }[] = [];
 
     for (const reading of readings) {
-      // Destructure known metric fields, and capture the rest (including sensor_type, numeric timestamp)
-      const { channel, iso_timestamp: readingTimestamp, temperature, humidity, co2, ...otherMetrics } = reading;
+      const { channel, iso_timestamp: readingTimestamp, temperature, humidity, co2 } = reading;
       
       const currentMetricsToProcess: Record<string, number | undefined> = { temperature, humidity, co2 };
 
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
           const sensor = sensorStmt.get(internalDeviceId, channel, sensorTypeInfo.type) as { id: string, type: string, unit: string } | undefined;
 
           if (!sensor) {
-            errorsEncountered.push({ channel, metric: metricKey, value: metricValue, message: `Sensor for type '${sensorTypeInfo.type}' not found on device '${userVisibleId}' for channel ${channel}.` });
+            errorsEncountered.push({ channel, metric: metricKey, value: metricValue, message: `Sensor for type '${sensorTypeInfo.type}' (metric key '${metricKey}') not found on device '${userVisibleId}' for channel ${channel}. Ensure a sensor of this type is registered for this channel and device.` });
             continue;
           }
 
@@ -128,14 +129,14 @@ export async function POST(request: NextRequest) {
 
           try {
             const insertReadingStmt = db.prepare('INSERT INTO sensor_readings (sensorId, timestamp, value) VALUES (?, ?, ?)');
-            insertReadingStmt.run(sensorId, readingTimestamp, metricValue); // Use ISO timestamp from the reading
+            insertReadingStmt.run(sensorId, readingTimestamp, metricValue);
 
             const updateSensorStmt = db.prepare('UPDATE sensors SET currentValue = ?, lastTimestamp = ? WHERE id = ?');
-            updateSensorStmt.run(metricValue, readingTimestamp, sensorId); // Use ISO timestamp from the reading
+            updateSensorStmt.run(metricValue, readingTimestamp, sensorId);
             
             metricsProcessed++;
           } catch (dbOpError: any) {
-             errorsEncountered.push({ channel, metric: metricKey, value: metricValue, message: `DB error for ${sensorTypeInfo.type} on channel ${channel}: ${dbOpError.message}` });
+             errorsEncountered.push({ channel, metric: metricKey, value: metricValue, message: `Database error processing metric '${metricKey}' for sensor type '${sensorTypeInfo.type}' on channel ${channel}: ${dbOpError.message}` });
           }
         }
       }
@@ -149,27 +150,34 @@ export async function POST(request: NextRequest) {
 
     if (errorsEncountered.length > 0) {
       const status = metricsProcessed > 0 ? 207 : 400; 
-      const message = `Processed ${metricsProcessed} out of ${totalMetricsAttempted} metrics. ${errorsEncountered.length} errors occurred.`;
+      const message = `Processed ${metricsProcessed} out of ${totalMetricsAttempted} attempted metrics for device '${userVisibleId}'. ${errorsEncountered.length > 0 ? `${errorsEncountered.length} errors occurred.` : ''}`;
       logFailedRequest(request, payload, 'Partial Ingestion Error / Metric Error', errorsEncountered, status, userVisibleId);
       return NextResponse.json({ 
         success: metricsProcessed > 0, 
         message: message,
+        processed_metrics: metricsProcessed,
+        attempted_metrics: totalMetricsAttempted,
         errors: errorsEncountered 
       }, { status });
     }
     
     if (totalMetricsAttempted === 0 && readings.length > 0) {
-        const message = "Payload received, but no recognizable/supported metrics found in readings.";
+        const message = "Payload received, but no recognizable or supported metrics (e.g., 'temperature', 'humidity', 'co2') were found in the 'readings' array, or the metrics provided had no values.";
         logFailedRequest(request, payload, 'No Valid Metrics', message, 400, userVisibleId);
         return NextResponse.json({ success: false, message: message }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true, message: `Successfully processed ${metricsProcessed} metrics for device '${userVisibleId}'.` }, { status: 201 });
+    return NextResponse.json({ 
+        success: true, 
+        message: `Successfully processed ${metricsProcessed} metrics for device '${userVisibleId}'.`,
+        processed_metrics: metricsProcessed,
+        attempted_metrics: totalMetricsAttempted
+    }, { status: 201 });
 
   } catch (error: any) {
     console.error('API - Failed to ingest sensor readings:', error);
-    const errorMessage = 'An internal server error occurred during processing.';
-    logFailedRequest(request, payload, 'Internal Server Error', error.message || errorMessage, 500, userVisibleId);
+    const errorMessage = 'An unexpected internal server error occurred. Please try again later or contact support if the issue persists.';
+    logFailedRequest(request, payload, 'Internal Server Error', error.message || 'Error details not available.', 500, userVisibleIdFromPayload || (payload && payload.device_id));
     return NextResponse.json({ success: false, message: errorMessage }, { status: 500 });
   }
 }

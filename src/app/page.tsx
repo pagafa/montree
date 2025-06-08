@@ -5,11 +5,12 @@ import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import SummarySection from '@/components/dashboard/SummarySection';
 import SensorDataTable from '@/components/dashboard/SensorDataTable';
-import type { SensorData, DBSensor, ManagedDevice } from '@/types';
+import type { SensorData, DBSensor, ManagedDevice, ApiRequestLog } from '@/types';
 import { getSensors as getAllDbSensors } from '@/app/sensors/actions';
 import { getDevices as getAllDbDevices } from '@/app/devices/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Info } from 'lucide-react';
+
 
 // Helper to map DBSensor to SensorData for UI display on dashboard
 const mapDbSensorToUi = (dbSensor: DBSensor): SensorData => ({
@@ -78,15 +79,18 @@ export default function DashboardPage() {
   
   return (
     <AppLayout pageTitle="Dashboard Overview">
-      <Card className="mb-6 shadow-lg rounded-lg border border-border p-4">
-        <div className="flex items-center mb-2">
-          <Info className="h-5 w-5 mr-2 text-primary" />
-          <CardTitle className="text-lg">Device Data Ingestion API</CardTitle>
-        </div>
+      <Card className="mb-6 shadow-md rounded-lg border border-border p-4">
+        <CardHeader className="p-2 pt-0">
+          <div className="flex items-center mb-2">
+            <Info className="h-5 w-5 mr-2 text-primary" />
+            <CardTitle className="text-lg">Device Data Ingestion API Endpoint</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="p-2 pb-0">
         {apiUrl ? (
           <>
             <p className="text-sm text-muted-foreground">
-              Your devices should send POST requests to the following URL:
+              Your devices should send POST requests to:
             </p>
             <div className="mt-2 p-3 bg-muted rounded-md">
               <code className="text-sm font-mono text-foreground break-all">{apiUrl}</code>
@@ -95,29 +99,7 @@ export default function DashboardPage() {
         ) : (
           <p className="text-sm text-muted-foreground">Loading API endpoint URL...</p>
         )}
-        <p className="text-xs text-muted-foreground mt-3">
-          Expected JSON payload format:
-        </p>
-        <pre className="mt-1 p-2 bg-muted/50 rounded-md text-xs font-mono text-foreground overflow-x-auto">
-          {`{
-  "device_id": "your-device-userVisibleId",
-  "iso_timestamp": "YYYY-MM-DDTHH:mm:ssZ", 
-  "readings": [
-    {
-      "channel": 1, 
-      "iso_timestamp": "YYYY-MM-DDTHH:mm:ssZ",
-      "temperature": 23.5, 
-      "humidity": 45.2, 
-      "co2": 500 
-      // ... other metrics like pressure, light_level etc.
-    },
-    // ... more readings for other channels/sensors ...
-  ]
-}`}
-        </pre>
-         <p className="text-xs text-muted-foreground mt-3">
-            Note: \`device_id\` must match a registered device's User Visible ID. \`channel\` is 1-8. Metrics are identified by keys like "temperature", "humidity", "co2".
-        </p>
+        </CardContent>
       </Card>
 
       <SummarySection sensorData={sensorData} deviceCount={devices.length} />
