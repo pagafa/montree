@@ -64,9 +64,6 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
-       <p className="mt-8 text-xs text-center text-slate-400">
-        For prototype purposes, the password is: <strong className="text-slate-300">firebase</strong>
-      </p>
     </div>
   );
 }
