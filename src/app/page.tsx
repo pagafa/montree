@@ -9,7 +9,7 @@ import type { SensorData, DBSensor, ManagedDevice } from '@/types';
 import { getSensors as getAllDbSensors } from '@/app/sensors/actions';
 import { getDevices as getAllDbDevices } from '@/app/devices/actions';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Info } from 'lucide-react';
 
 // Helper to map DBSensor to SensorData for UI display on dashboard
 const mapDbSensorToUi = (dbSensor: DBSensor): SensorData => ({
@@ -20,7 +20,7 @@ const mapDbSensorToUi = (dbSensor: DBSensor): SensorData => ({
   value: dbSensor.currentValue,
   unit: dbSensor.unit,
   timestamp: dbSensor.lastTimestamp ? new Date(dbSensor.lastTimestamp) : null,
-  deviceId: dbSensor.deviceId, // This is the ID, SummarySection might need device name if desired
+  deviceId: dbSensor.deviceId,
 });
 
 
@@ -29,6 +29,12 @@ export default function DashboardPage() {
   const [devices, setDevices] = useState<ManagedDevice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const [apiUrl, setApiUrl] = useState('/api/ingest-readings'); // Default for SSR
+
+  useEffect(() => {
+    // This will only run on the client, after initial hydration
+    setApiUrl(`${window.location.origin}/api/ingest-readings`);
+  }, []); // Empty dependency array ensures this runs once on mount
 
   const fetchDashboardData = useCallback(async () => {
     setIsLoading(true);
@@ -46,7 +52,6 @@ export default function DashboardPage() {
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
       toast({ title: "Error", description: "Could not load dashboard data.", variant: "destructive" });
-      // Set empty arrays on error to prevent UI breakage
       setSensorData([]);
       setDevices([]);
     } finally {
@@ -71,7 +76,42 @@ export default function DashboardPage() {
   
   return (
     <AppLayout pageTitle="Dashboard Overview">
-      {/* SummarySection expects SensorData where 'device' is deviceId. It counts unique deviceIds. */}
+      <Card className="mb-6 shadow-md rounded-lg">
+        <CardHeader className="pb-3">
+          <div className="flex items-center">
+            <Info className="h-5 w-5 mr-2 text-primary" />
+            <CardTitle className="text-lg">Device Data Ingestion</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Your devices should send their sensor readings via POST request to the following URL:
+          </p>
+          <div className="mt-2 p-3 bg-muted rounded-md">
+            <code className="text-sm font-mono text-foreground break-all">{apiUrl}</code>
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            Ensure the request body is a JSON payload in the format:
+          </p>
+          <pre className="mt-1 p-2 bg-muted/50 rounded-md text-xs font-mono text-foreground overflow-x-auto">
+            {`{
+  "device_id": "your-device-userVisibleId",
+  "timestamp": "YYYY-MM-DDTHH:mm:ssZ",
+  "readings": [
+    {"channel": 1, "type": "Temperature", "value": 23.5},
+    {"channel": 1, "type": "CO2", "value": 600},
+    {"channel": 2, "type": "Light", "value": 1200}
+  ]
+}`}
+          </pre>
+           <p className="text-xs text-muted-foreground mt-3">
+            Note: The `device_id` should be the user-visible ID you assign to devices.
+            The `timestamp` in the payload is for the batch of readings. Individual sensor readings will be recorded with the server's current time when processed.
+            The `channel` field is mandatory for each reading (1-8). Sensor `type` should match system types (e.g., "Temperature", "CO2").
+          </p>
+        </CardContent>
+      </Card>
+
       <SummarySection sensorData={sensorData} deviceCount={devices.length} />
       <div className="grid auto-rows-max items-start gap-6 md:gap-8 lg:grid-cols-1">
         <Card className="lg:col-span-1 shadow-md rounded-lg">
@@ -80,7 +120,6 @@ export default function DashboardPage() {
             <CardDescription>A quick look at recent sensor data from various devices.</CardDescription>
           </CardHeader>
           <CardContent>
-            {/* SensorDataTable expects SensorData where 'device' is deviceId */}
             <SensorDataTable data={sensorData} />
           </CardContent>
         </Card>
