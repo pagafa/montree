@@ -13,21 +13,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { SENSOR_TYPES_ARRAY, SENSOR_NAMES_ARRAY } from '@/lib/mock-data'; // SENSOR_NAMES_ARRAY for default name suggestion
-import type { SensorData, ManagedDevice, DBSensor } from '@/types';
-import { PlusCircle, Loader2 } from 'lucide-react';
+import { SENSOR_TYPES_ARRAY, SENSOR_NAMES_ARRAY } from '@/lib/mock-data';
+import type { SensorData, ManagedDevice, DBSensor, ApiRequestLog } from '@/types';
+import { PlusCircle, Loader2, AlertTriangle, Info, TableIcon } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader as ShadTableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { getSensors, addSensor, updateSensor, deleteSensor } from './actions';
-import { getDevices } from '@/app/devices/actions'; // To fetch devices for the dropdown
+import { getSensors, addSensor, updateSensor, deleteSensor, type AddSensorFormData, type UpdateSensorFormData } from './actions';
+import { getDevices } from '@/app/devices/actions';
+import { getUnregisteredDeviceOrSensorAttempts, clearApiRequestLogs } from '@/app/logs/actions';
 
 // Zod schema for form validation
 const sensorFormSchema = z.object({
-  id: z.string().optional(), // Not directly in form, but used for state
+  id: z.string().optional(),
   name: z.string().min(1, "Sensor name is required"),
   type: z.enum(SENSOR_TYPES_ARRAY),
   channel: z.coerce.number().int().min(1, "Channel must be between 1 and 8").max(8, "Channel must be between 1 and 8"),
-  initialValue: z.coerce.number().nullable().default(null), // For 'add' mode, represents 'currentValue'
-  unit: z.string().min(1, "Unit is required"), // Derived, but part of form state
+  initialValue: z.coerce.number().nullable().default(null),
+  unit: z.string().min(1, "Unit is required"),
   deviceId: z.string().min(1, "Device assignment is required"),
 });
 type SensorFormValues = z.infer<typeof sensorFormSchema>;
@@ -41,6 +43,23 @@ const UNITS_OPTIONS: { [key in SensorData['type']]: string } = {
   Generic: 'units',
   CO2: 'ppm'
 };
+
+const METRIC_KEY_TO_SENSOR_TYPE: Record<string, SensorData['type'] | undefined> = {
+  temperature: 'Temperature',
+  humidity: 'Humidity',
+  co2: 'CO2',
+  pressure: 'Pressure',
+  light: 'Light',
+};
+
+interface UnregisteredSensorAttempt {
+  key: string; // Unique key for React list, e.g., deviceId-channel-type
+  deviceId: string;
+  deviceName?: string;
+  channel: number;
+  attemptedType: SensorData['type'];
+  lastAttempt: string;
+}
 
 // Helper to map DBSensor to SensorData for UI display
 const mapDbSensorToUi = (dbSensor: DBSensor): SensorData => ({
@@ -57,11 +76,14 @@ const mapDbSensorToUi = (dbSensor: DBSensor): SensorData => ({
 export default function SensorsPage() {
   const [sensors, setSensors] = useState<SensorData[]>([]);
   const [devices, setDevices] = useState<ManagedDevice[]>([]);
+  const [unregisteredSensorAttempts, setUnregisteredSensorAttempts] = useState<UnregisteredSensorAttempt[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [currentSensor, setCurrentSensor] = useState<SensorData | null>(null); // For edit/delete context
+  const [isClearLogsDialogOpen, setIsClearLogsDialogOpen] = useState(false);
+  const [currentSensor, setCurrentSensor] = useState<SensorData | null>(null);
   const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
   const { toast } = useToast();
 
@@ -69,7 +91,7 @@ export default function SensorsPage() {
     resolver: zodResolver(sensorFormSchema),
   });
 
-  const fetchInitialData = useCallback(async () => {
+  const fetchPageData = useCallback(async () => {
     setIsLoading(true);
     try {
       const [fetchedDbSensors, fetchedDevices] = await Promise.all([
@@ -77,21 +99,88 @@ export default function SensorsPage() {
         getDevices()
       ]);
       setSensors(fetchedDbSensors.map(mapDbSensorToUi));
-      setDevices(fetchedDevices);
+      setDevices(fetchedDevices.sort((a,b) => a.name.localeCompare(b.name)));
     } catch (error) {
-      console.error("Failed to fetch initial data:", error);
-      toast({ title: "Error", description: "Could not load initial sensor or device data.", variant: "destructive" });
+      console.error("Failed to fetch sensor or device data:", error);
+      toast({ title: "Error", description: "Could not load sensor or device data.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   }, [toast]);
+  
+  const fetchUnregisteredSensorAlerts = useCallback(async (currentSensors: SensorData[], currentDevices: ManagedDevice[]) => {
+    setIsLoadingLogs(true);
+    try {
+      const logs = await getUnregisteredDeviceOrSensorAttempts(100); // Fetch a decent number of logs
+      const sensorErrorLogs = logs.filter(log => log.error_type === 'Partial Ingestion Error / Metric Error' && log.device_id_attempted && log.error_details);
+      
+      const attemptsMap = new Map<string, UnregisteredSensorAttempt>();
+      const registeredDevicesMap = new Map(currentDevices.map(d => [d.id, d.name]));
+
+      sensorErrorLogs.forEach(log => {
+        try {
+          const errorDetailsArray = JSON.parse(log.error_details!);
+          if (Array.isArray(errorDetailsArray)) {
+            errorDetailsArray.forEach(detail => {
+              const deviceIdAttempted = log.device_id_attempted!;
+              // Find the internal device ID from userVisibleId
+              const matchedDevice = currentDevices.find(d => d.userVisibleId === deviceIdAttempted);
+              if (!matchedDevice) return; // Skip if device itself isn't registered
+              
+              const internalDeviceId = matchedDevice.id;
+              const channel = detail.channel;
+              const metricKey = detail.metric;
+              const attemptedType = METRIC_KEY_TO_SENSOR_TYPE[metricKey];
+
+              if (attemptedType && channel) {
+                const isRegistered = currentSensors.some(s => 
+                  s.deviceId === internalDeviceId && 
+                  s.channel === channel && 
+                  s.type === attemptedType
+                );
+
+                if (!isRegistered) {
+                  const key = `${internalDeviceId}-${channel}-${attemptedType}`;
+                  const existing = attemptsMap.get(key);
+                  if (!existing || new Date(log.timestamp) > new Date(existing.lastAttempt)) {
+                    attemptsMap.set(key, {
+                      key,
+                      deviceId: internalDeviceId, // Store internal ID for form prefill
+                      deviceName: registeredDevicesMap.get(internalDeviceId) || deviceIdAttempted,
+                      channel,
+                      attemptedType,
+                      lastAttempt: log.timestamp,
+                    });
+                  }
+                }
+              }
+            });
+          }
+        } catch (e) {
+          console.warn("Failed to parse error_details for log:", log.id, e);
+        }
+      });
+      setUnregisteredSensorAttempts(Array.from(attemptsMap.values()).sort((a,b) => new Date(b.lastAttempt).getTime() - new Date(a.lastAttempt).getTime()));
+    } catch (error) {
+      console.error("Failed to fetch unregistered sensor attempts:", error);
+      toast({ title: "Error", description: "Could not load unregistered sensor configuration attempts.", variant: "destructive" });
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  }, [toast]);
+
 
   useEffect(() => {
-    fetchInitialData();
-  }, [fetchInitialData]);
+    fetchPageData();
+  }, [fetchPageData]);
+
+  useEffect(() => {
+    if (!isLoading) { // Only fetch attempts after sensors and devices are loaded
+        fetchUnregisteredSensorAlerts(sensors, devices);
+    }
+  }, [isLoading, sensors, devices, fetchUnregisteredSensorAlerts]);
   
   useEffect(() => {
-    // Reset form when dialog opens or mode changes
     if (isFormDialogOpen) {
       if (dialogMode === 'edit' && currentSensor) {
         form.reset({
@@ -99,43 +188,56 @@ export default function SensorsPage() {
           name: currentSensor.name,
           type: currentSensor.type,
           channel: currentSensor.channel,
-          initialValue: currentSensor.value, // Keep for form state, hidden in 'edit'
-          unit: currentSensor.unit,         // Keep for form state, hidden in 'edit'
+          initialValue: null, // Not relevant for edit, but keep in form state
+          unit: currentSensor.unit,
           deviceId: currentSensor.deviceId,
         });
-      } else { // Add mode
+      } else { // Add mode, potentially prefilled
         const initialType = SENSOR_TYPES_ARRAY[0];
         form.reset({
           id: undefined,
           name: SENSOR_NAMES_ARRAY[Math.floor(Math.random() * SENSOR_NAMES_ARRAY.length)],
           type: initialType,
           channel: 1,
-          initialValue: null, // Default to no initial value
+          initialValue: null,
           unit: UNITS_OPTIONS[initialType],
-          deviceId: devices.length > 0 ? devices[0].id : '', // Default to first device if available
+          deviceId: devices.length > 0 ? devices[0].id : '',
         });
       }
+      form.clearErrors();
     }
   }, [isFormDialogOpen, dialogMode, currentSensor, form, devices]);
 
   const watchedType = form.watch("type");
   useEffect(() => {
-    if (watchedType && isFormDialogOpen) { // Update unit only when dialog is open and type changes
+    if (watchedType && isFormDialogOpen) {
       form.setValue("unit", UNITS_OPTIONS[watchedType]);
     }
   }, [watchedType, form, isFormDialogOpen]);
 
 
-  const handleAddSensor = () => {
+  const handleAddSensor = (prefill?: Partial<SensorFormValues>) => {
     setDialogMode('add');
     setCurrentSensor(null);
+    // Apply prefills if any
+    const initialType = prefill?.type || SENSOR_TYPES_ARRAY[0];
+    form.reset({
+      id: undefined,
+      name: prefill?.name || SENSOR_NAMES_ARRAY[Math.floor(Math.random() * SENSOR_NAMES_ARRAY.length)],
+      type: initialType,
+      channel: prefill?.channel || 1,
+      initialValue: prefill?.initialValue || null,
+      unit: UNITS_OPTIONS[initialType],
+      deviceId: prefill?.deviceId || (devices.length > 0 ? devices[0].id : ''),
+    });
+    form.clearErrors();
     setIsFormDialogOpen(true);
   };
 
   const handleEditSensor = (sensor: SensorData) => {
     setDialogMode('edit');
     setCurrentSensor(sensor);
-    setIsFormDialogOpen(true);
+    setIsFormDialogOpen(true); // useEffect will populate form
   };
 
   const handleDeleteSensor = (sensor: SensorData) => {
@@ -147,52 +249,37 @@ export default function SensorsPage() {
     setIsSubmitting(true);
     form.clearErrors();
 
-    if (dialogMode === 'add') {
-      const result = await addSensor({
+    const payload: AddSensorFormData | UpdateSensorFormData = {
         name: data.name,
         type: data.type,
         channel: data.channel,
-        unit: data.unit, // Unit is derived and set in form state
+        unit: data.unit,
         deviceId: data.deviceId,
-        initialValue: data.initialValue,
-      });
-      
-      if (result.success && result.sensor) {
-        // setSensors(prev => [mapDbSensorToUi(result.sensor!), ...prev].sort((a,b) => a.deviceId.localeCompare(b.deviceId) || a.name.localeCompare(b.name)));
-        await fetchInitialData(); // Re-fetch for consistency
-        toast({ title: "Sensor Added", description: `Sensor "${data.name}" has been added.` });
-        setIsFormDialogOpen(false);
-      } else {
-        if (result.errorField) {
-          form.setError(result.errorField as keyof SensorFormValues, { type: "manual", message: result.message });
-        } else {
-          toast({ title: "Error", description: result.message || "Failed to add sensor.", variant: "destructive" });
-        }
-      }
-    } else { // dialogMode === 'edit'
-      if (currentSensor) {
-        // Unit is updated if type changes, handled by form.watch("type") useEffect
-        const result = await updateSensor(currentSensor.id, {
-          name: data.name,
-          type: data.type,
-          channel: data.channel,
-          unit: data.unit, 
-          deviceId: data.deviceId,
-        });
+        ...(dialogMode === 'add' && { initialValue: data.initialValue }),
+    };
 
-        if (result.success && result.sensor) {
-          // setSensors(prev => prev.map(s => s.id === currentSensor!.id ? mapDbSensorToUi(result.sensor!) : s).sort((a,b) =>a.deviceId.localeCompare(b.deviceId) || a.name.localeCompare(b.name)));
-          await fetchInitialData(); // Re-fetch
-          toast({ title: "Sensor Updated", description: `Sensor "${data.name}" has been updated.` });
-          setIsFormDialogOpen(false);
-        } else {
-          if (result.errorField) {
-            form.setError(result.errorField as keyof SensorFormValues, { type: "manual", message: result.message });
-          } else {
-            toast({ title: "Error", description: result.message || "Failed to update sensor.", variant: "destructive" });
-          }
-        }
+    let result;
+    if (dialogMode === 'add') {
+      result = await addSensor(payload as AddSensorFormData);
+    } else { // dialogMode === 'edit'
+      if (!currentSensor) {
+        toast({ title: "Error", description: "No sensor selected for editing.", variant: "destructive" });
+        setIsSubmitting(false);
+        return;
       }
+      result = await updateSensor(currentSensor.id, payload as UpdateSensorFormData);
+    }
+      
+    if (result.success && result.sensor) {
+        await fetchPageData(); // Re-fetch for consistency
+        toast({ title: dialogMode === 'add' ? "Sensor Added" : "Sensor Updated", description: `Sensor "${data.name}" has been processed.` });
+        setIsFormDialogOpen(false);
+    } else {
+        if (result.errorField) {
+        form.setError(result.errorField as keyof SensorFormValues, { type: "manual", message: result.message });
+        } else {
+        toast({ title: "Error", description: result.message || "Failed to process sensor.", variant: "destructive" });
+        }
     }
     setIsSubmitting(false);
   };
@@ -204,8 +291,7 @@ export default function SensorsPage() {
       setIsSubmitting(false);
 
       if (result.success) {
-        // setSensors(prev => prev.filter(s => s.id !== currentSensor.id));
-        await fetchInitialData(); // Re-fetch
+        await fetchPageData();
         setIsDeleteDialogOpen(false);
         toast({ title: "Sensor Deleted", description: `Sensor "${currentSensor.name}" has been deleted.`, variant: "destructive" });
       } else {
@@ -213,15 +299,90 @@ export default function SensorsPage() {
       }
     }
   };
+
+  const handleClearLogs = async () => {
+    setIsSubmitting(true);
+    const result = await clearApiRequestLogs();
+    setIsSubmitting(false);
+    if (result.success) {
+      toast({ title: "Logs Cleared", description: result.message });
+      await fetchUnregisteredSensorAlerts(sensors, devices); // Re-fetch to clear the list
+    } else {
+      toast({ title: "Error", description: result.message || "Failed to clear logs.", variant: "destructive" });
+    }
+    setIsClearLogsDialogOpen(false);
+  };
   
   return (
     <AppLayout pageTitle="Sensor Management">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-semibold">Manage Sensors</h2>
-        <Button onClick={handleAddSensor} disabled={isLoading}>
+        <Button onClick={() => handleAddSensor()} disabled={isLoading}>
           <PlusCircle className="mr-2 h-4 w-4" /> Add New Sensor
         </Button>
       </div>
+
+      {/* Unregistered Sensor Configurations Card */}
+      <Card className="mb-6 shadow-md rounded-lg">
+        <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+                <CardTitle className="flex items-center">
+                    <AlertTriangle className="h-5 w-5 mr-2 text-amber-500" />
+                    Unregistered Sensor Configurations
+                </CardTitle>
+                <CardDescription>Sensor configurations that devices attempted to use but are not registered.</CardDescription>
+            </div>
+            {unregisteredSensorAttempts.length > 0 && (
+                 <Button variant="outline" size="sm" onClick={() => setIsClearLogsDialogOpen(true)} disabled={isSubmitting || isLoadingLogs}>
+                    Clear Alerts
+                </Button>
+            )}
+        </CardHeader>
+        <CardContent>
+            {isLoadingLogs ? (
+                <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <p className="ml-2 text-muted-foreground">Loading alerts...</p>
+                </div>
+            ) : unregisteredSensorAttempts.length > 0 ? (
+                 <div className="rounded-md border">
+                    <Table>
+                        <ShadTableHeader>
+                        <TableRow>
+                            <TableHead>Device</TableHead>
+                            <TableHead>Channel</TableHead>
+                            <TableHead>Attempted Type</TableHead>
+                            <TableHead>Last Attempt</TableHead>
+                            <TableHead className="text-right w-[120px]">Action</TableHead>
+                        </TableRow>
+                        </ShadTableHeader>
+                        <TableBody>
+                        {unregisteredSensorAttempts.map((attempt) => (
+                            <TableRow key={attempt.key}>
+                            <TableCell>{attempt.deviceName || attempt.deviceId}</TableCell>
+                            <TableCell>{attempt.channel}</TableCell>
+                            <TableCell>{attempt.attemptedType}</TableCell>
+                            <TableCell>{new Date(attempt.lastAttempt).toLocaleString()}</TableCell>
+                            <TableCell className="text-right">
+                                <Button variant="default" size="sm" onClick={() => handleAddSensor({ deviceId: attempt.deviceId, channel: attempt.channel, type: attempt.attemptedType })}>
+                                <PlusCircle className="mr-2 h-4 w-4" /> Add
+                                </Button>
+                            </TableCell>
+                            </TableRow>
+                        ))}
+                        </TableBody>
+                    </Table>
+                 </div>
+            ) : (
+                <div className="flex items-center text-sm text-muted-foreground py-6">
+                    <Info className="h-5 w-5 mr-2 text-primary" />
+                    No unregistered sensor configuration attempts found in recent logs.
+                </div>
+            )}
+        </CardContent>
+      </Card>
+
+
       <Card className="shadow-md rounded-lg">
         <CardHeader>
           <CardTitle>All Sensors</CardTitle>
@@ -286,7 +447,7 @@ export default function SensorsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="sensorInitialValue">Initial Value (Optional)</Label>
-                  <Input id="sensorInitialValue" type="number" step="0.01" {...form.register("initialValue")} placeholder="e.g. 23.5" disabled={isSubmitting} />
+                  <Input id="sensorInitialValue" type="number" step="any" {...form.register("initialValue", { setValueAs: (v) => v === "" ? null : parseFloat(v) })} placeholder="e.g. 23.5" disabled={isSubmitting} />
                   {form.formState.errors.initialValue && <p className="text-sm text-destructive mt-1">{form.formState.errors.initialValue.message}</p>}
                 </div>
                 <div>
@@ -295,6 +456,13 @@ export default function SensorsPage() {
                    {form.formState.errors.unit && <p className="text-sm text-destructive mt-1">{form.formState.errors.unit.message}</p>}
                 </div>
               </div>
+            )}
+            {dialogMode === 'edit' && ( // Show unit field as read-only for edit mode as well
+                <div>
+                  <Label htmlFor="editSensorUnit">Unit (Auto-derived)</Label>
+                  <Input id="editSensorUnit" {...form.register("unit")} readOnly className="bg-muted/50" disabled={isSubmitting} />
+                   {form.formState.errors.unit && <p className="text-sm text-destructive mt-1">{form.formState.errors.unit.message}</p>}
+                </div>
             )}
 
              <div>
@@ -317,7 +485,7 @@ export default function SensorsPage() {
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                <Button type="button" variant="outline" disabled={isSubmitting}>Cancel</Button>
+                <Button type="button" variant="outline" disabled={isSubmitting} onClick={() => setIsFormDialogOpen(false)}>Cancel</Button>
               </DialogClose>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -342,6 +510,25 @@ export default function SensorsPage() {
             <AlertDialogAction onClick={onConfirmDelete} className={buttonVariants({ variant: "destructive" })} disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear Logs Confirmation Dialog */}
+      <AlertDialog open={isClearLogsDialogOpen} onOpenChange={(isOpen) => { if (!isSubmitting) setIsClearLogsDialogOpen(isOpen); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear All API Request Alerts?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all API request logs, which are used to generate these alerts. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearLogs} className={buttonVariants({ variant: "destructive" })} disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Clear All Logs
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

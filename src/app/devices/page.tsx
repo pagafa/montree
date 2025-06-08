@@ -1,6 +1,6 @@
 
 "use client";
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,10 +12,11 @@ import { Label } from '@/components/ui/label';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import type { ManagedDevice } from '@/types';
-import { HardDrive, PlusCircle, Pencil, Trash2, Loader2 } from 'lucide-react';
+import type { ManagedDevice, ApiRequestLog } from '@/types';
+import { HardDrive, PlusCircle, Pencil, Trash2, Loader2, AlertTriangle, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getDevices, addDevice, updateDevice, deleteDevice } from './actions';
+import { getUnregisteredDeviceOrSensorAttempts, clearApiRequestLogs } from '@/app/logs/actions';
 
 const deviceFormSchema = z.object({
   userVisibleId: z.string().min(1, "Device ID is required"),
@@ -23,13 +24,21 @@ const deviceFormSchema = z.object({
 });
 type DeviceFormValues = z.infer<typeof deviceFormSchema>;
 
+interface UnregisteredDeviceAttempt {
+  userVisibleId: string;
+  lastAttempt: string; 
+}
+
 export default function DevicesPage() {
   const [devices, setDevices] = useState<ManagedDevice[]>([]);
+  const [unregisteredAttempts, setUnregisteredAttempts] = useState<UnregisteredDeviceAttempt[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isClearLogsDialogOpen, setIsClearLogsDialogOpen] = useState(false);
   const [currentDevice, setCurrentDevice] = useState<ManagedDevice | null>(null);
   const { toast } = useToast();
 
@@ -38,7 +47,7 @@ export default function DevicesPage() {
     defaultValues: { userVisibleId: '', name: '' },
   });
 
-  const fetchDevices = useCallback(async () => {
+  const fetchDeviceData = useCallback(async () => {
     setIsLoading(true);
     try {
       const fetchedDevices = await getDevices();
@@ -51,21 +60,61 @@ export default function DevicesPage() {
     }
   }, [toast]);
 
-  useEffect(() => {
-    fetchDevices();
-  }, [fetchDevices]);
+  const fetchUnregisteredAttempts = useCallback(async (currentDevices: ManagedDevice[]) => {
+    setIsLoadingLogs(true);
+    try {
+      const logs = await getUnregisteredDeviceOrSensorAttempts(50); // Fetch more logs to ensure we get device not found errors
+      const deviceNotFoundLogs = logs.filter(log => log.error_type === 'Device Not Found' && log.device_id_attempted);
+      
+      const registeredDeviceIds = new Set(currentDevices.map(d => d.userVisibleId));
+      
+      const attemptsMap = new Map<string, UnregisteredDeviceAttempt>();
 
-  const handleAddDevice = () => {
+      deviceNotFoundLogs.forEach(log => {
+        if (log.device_id_attempted && !registeredDeviceIds.has(log.device_id_attempted)) {
+          const existing = attemptsMap.get(log.device_id_attempted);
+          if (!existing || new Date(log.timestamp) > new Date(existing.lastAttempt)) {
+            attemptsMap.set(log.device_id_attempted, {
+              userVisibleId: log.device_id_attempted,
+              lastAttempt: log.timestamp,
+            });
+          }
+        }
+      });
+      setUnregisteredAttempts(Array.from(attemptsMap.values()).sort((a,b) => new Date(b.lastAttempt).getTime() - new Date(a.lastAttempt).getTime()));
+
+    } catch (error) {
+      console.error("Failed to fetch unregistered device attempts:", error);
+      toast({ title: "Error", description: "Could not load unregistered device attempts.", variant: "destructive" });
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchDeviceData();
+  }, [fetchDeviceData]);
+
+  useEffect(() => {
+    if (!isLoading) { // Only fetch attempts after devices are loaded
+        fetchUnregisteredAttempts(devices);
+    }
+  }, [isLoading, devices, fetchUnregisteredAttempts]);
+
+
+  const handleAddDevice = (prefillId?: string) => {
     form.reset({
-      userVisibleId: `DEV-${(Math.floor(Math.random() * 900) + 100)}`, // Suggest a random ID
+      userVisibleId: prefillId || `DEV-${(Math.floor(Math.random() * 900) + 100)}`,
       name: ''
     });
+    form.clearErrors();
     setIsAddDialogOpen(true);
   };
 
   const handleEditDevice = (device: ManagedDevice) => {
     setCurrentDevice(device);
     form.reset({ userVisibleId: device.userVisibleId, name: device.name });
+    form.clearErrors();
     setIsEditDialogOpen(true);
   };
 
@@ -81,8 +130,7 @@ export default function DevicesPage() {
     setIsSubmitting(false);
 
     if (result.success && result.device) {
-      // setDevices(prev => [result.device!, ...prev].sort((a,b) => a.name.localeCompare(b.name))); // Optimistic update
-      await fetchDevices(); // Re-fetch to ensure consistency
+      await fetchDeviceData(); // Re-fetch to ensure consistency and update unregistered list
       setIsAddDialogOpen(false);
       toast({ title: "Device Added", description: `Device "${data.name}" has been added.` });
     } else {
@@ -102,8 +150,7 @@ export default function DevicesPage() {
       setIsSubmitting(false);
 
       if (result.success && result.device) {
-        // setDevices(prev => prev.map(d => d.id === currentDevice.id ? { ...result.device! } : d).sort((a,b) => a.name.localeCompare(b.name)));
-        await fetchDevices();
+        await fetchDeviceData();
         setIsEditDialogOpen(false);
         toast({ title: "Device Updated", description: `Device "${data.name}" has been updated.` });
       } else {
@@ -123,8 +170,7 @@ export default function DevicesPage() {
       setIsSubmitting(false);
 
       if (result.success) {
-        // setDevices(prev => prev.filter(d => d.id !== currentDevice.id));
-        await fetchDevices();
+        await fetchDeviceData();
         setIsDeleteDialogOpen(false);
         toast({ title: "Device Deleted", description: `Device "${currentDevice.name}" has been deleted.`, variant: "destructive" });
       } else {
@@ -133,14 +179,86 @@ export default function DevicesPage() {
     }
   };
 
+  const handleClearLogs = async () => {
+    setIsSubmitting(true);
+    const result = await clearApiRequestLogs();
+    setIsSubmitting(false);
+    if (result.success) {
+      toast({ title: "Logs Cleared", description: result.message });
+      await fetchUnregisteredAttempts(devices); // Re-fetch to clear the list
+    } else {
+      toast({ title: "Error", description: result.message || "Failed to clear logs.", variant: "destructive" });
+    }
+    setIsClearLogsDialogOpen(false);
+  };
+
+
   return (
     <AppLayout pageTitle="Device Management">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-semibold">Manage Devices</h2>
-        <Button onClick={handleAddDevice} disabled={isLoading}>
+        <Button onClick={() => handleAddDevice()} disabled={isLoading}>
           <PlusCircle className="mr-2 h-4 w-4" /> Add New Device
         </Button>
       </div>
+
+      {/* Unregistered Device Attempts Card */}
+      <Card className="mb-6 shadow-md rounded-lg">
+        <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+                <CardTitle className="flex items-center">
+                    <AlertTriangle className="h-5 w-5 mr-2 text-amber-500" />
+                    Unregistered Device IDs
+                </CardTitle>
+                <CardDescription>Device IDs that attempted to send data but are not registered.</CardDescription>
+            </div>
+            {unregisteredAttempts.length > 0 && (
+                 <Button variant="outline" size="sm" onClick={() => setIsClearLogsDialogOpen(true)} disabled={isSubmitting || isLoadingLogs}>
+                    Clear Alerts
+                </Button>
+            )}
+        </CardHeader>
+        <CardContent>
+            {isLoadingLogs ? (
+                <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <p className="ml-2 text-muted-foreground">Loading alerts...</p>
+                </div>
+            ) : unregisteredAttempts.length > 0 ? (
+                 <div className="rounded-md border">
+                    <Table>
+                        <TableHeader>
+                        <TableRow>
+                            <TableHead>Attempted Device ID</TableHead>
+                            <TableHead>Last Attempt</TableHead>
+                            <TableHead className="text-right w-[120px]">Action</TableHead>
+                        </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                        {unregisteredAttempts.map((attempt) => (
+                            <TableRow key={attempt.userVisibleId}>
+                            <TableCell className="font-mono text-xs">{attempt.userVisibleId}</TableCell>
+                            <TableCell>{new Date(attempt.lastAttempt).toLocaleString()}</TableCell>
+                            <TableCell className="text-right">
+                                <Button variant="default" size="sm" onClick={() => handleAddDevice(attempt.userVisibleId)}>
+                                <PlusCircle className="mr-2 h-4 w-4" /> Add
+                                </Button>
+                            </TableCell>
+                            </TableRow>
+                        ))}
+                        </TableBody>
+                    </Table>
+                 </div>
+            ) : (
+                <div className="flex items-center text-sm text-muted-foreground py-6">
+                    <Info className="h-5 w-5 mr-2 text-primary" />
+                    No unregistered device attempts found in recent logs.
+                </div>
+            )}
+        </CardContent>
+      </Card>
+
+
       <Card className="shadow-md rounded-lg">
         <CardHeader>
           <CardTitle>All Registered Devices</CardTitle>
@@ -269,6 +387,26 @@ export default function DevicesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Clear Logs Confirmation Dialog */}
+      <AlertDialog open={isClearLogsDialogOpen} onOpenChange={(isOpen) => { if (!isSubmitting) setIsClearLogsDialogOpen(isOpen); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear All API Request Alerts?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all API request logs, which are used to generate these alerts. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearLogs} className={buttonVariants({ variant: "destructive" })} disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Clear All Logs
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
+
