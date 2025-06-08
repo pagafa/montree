@@ -39,7 +39,7 @@ const MetricReadingSchema = z.object({
   channel: z.coerce.number().int().min(1, "Channel must be 1-8").max(8, "Channel must be 1-8"),
   iso_timestamp: z.string().datetime({ message: "Invalid iso_timestamp format for reading. Expected ISO 8601 datetime string." }),
   timestamp: z.number().optional(), // Numeric timestamp from payload
-  sensor_type: z.string().optional(), // e.g., "SCD30", "LTR329"
+  sensor_type: z.coerce.number().int().optional(), // e.g., 2 for "SCD30"
   temperature: z.number().optional(),
   humidity: z.number().optional(),
   co2: z.number().optional(),
