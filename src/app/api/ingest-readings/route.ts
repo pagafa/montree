@@ -2,8 +2,37 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { z } from 'zod';
-import { SENSOR_TYPES_ARRAY } from '@/lib/mock-data'; // Using existing array for type validation
+import { SENSOR_TYPES_ARRAY } from '@/lib/mock-data';
 import { revalidatePath } from 'next/cache';
+
+const logFailedRequest = (
+  request: NextRequest,
+  payload: any,
+  errorType: string,
+  errorDetails: any,
+  statusCode: number,
+  deviceIdAttempted?: string
+) => {
+  try {
+    const logStmt = db.prepare(
+      'INSERT INTO api_request_logs (timestamp, ip_address, method, path, device_id_attempted, payload_received, error_type, error_details, status_code_returned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    logStmt.run(
+      new Date().toISOString(),
+      request.headers.get('x-forwarded-for') || request.ip || null,
+      request.method,
+      request.nextUrl.pathname,
+      deviceIdAttempted || (payload && payload.device_id) || null,
+      payload ? JSON.stringify(payload) : null,
+      errorType,
+      typeof errorDetails === 'string' ? errorDetails : JSON.stringify(errorDetails),
+      statusCode
+    );
+    revalidatePath('/'); // Revalidate dashboard to show new log
+  } catch (dbError) {
+    console.error('Failed to log API request error to DB:', dbError);
+  }
+};
 
 // Define the schema for individual readings within the payload
 const ReadingSchema = z.object({
@@ -26,13 +55,17 @@ export async function POST(request: NextRequest) {
   try {
     payload = await request.json();
   } catch (error) {
-    return NextResponse.json({ success: false, message: 'Invalid JSON payload.' }, { status: 400 });
+    const errorMessage = 'Invalid JSON payload.';
+    logFailedRequest(request, null, 'Invalid JSON', errorMessage, 400);
+    return NextResponse.json({ success: false, message: errorMessage }, { status: 400 });
   }
 
   const validation = IngestPayloadSchema.safeParse(payload);
 
   if (!validation.success) {
-    return NextResponse.json({ success: false, message: 'Validation failed.', errors: validation.error.flatten().fieldErrors }, { status: 400 });
+    const errors = validation.error.flatten().fieldErrors;
+    logFailedRequest(request, payload, 'Validation Error', errors, 400, payload.device_id);
+    return NextResponse.json({ success: false, message: 'Validation failed.', errors: errors }, { status: 400 });
   }
 
   const { device_id: userVisibleId, timestamp: batchTimestamp, readings } = validation.data;
@@ -43,16 +76,14 @@ export async function POST(request: NextRequest) {
     const device = deviceStmt.get(userVisibleId) as { id: string } | undefined;
 
     if (!device) {
-      return NextResponse.json({ success: false, message: `Device with userVisibleId '${userVisibleId}' not found.` }, { status: 404 });
+      const errorMessage = `Device with userVisibleId '${userVisibleId}' not found.`;
+      logFailedRequest(request, payload, 'Device Not Found', errorMessage, 404, userVisibleId);
+      return NextResponse.json({ success: false, message: errorMessage }, { status: 404 });
     }
     const internalDeviceId = device.id;
 
     let readingsProcessed = 0;
-    let errors: { channel: number, type: string, message: string }[] = [];
-
-    // Use a transaction to ensure all readings are processed or none are (if a critical error occurs)
-    // However, for simplicity here, we'll process one by one and report partial success/failures.
-    // A more robust implementation would use db.transaction(() => { ... })();
+    let errorsEncountered: { channel: number, type: string, message: string }[] = [];
 
     for (const reading of readings) {
       // Find the sensor by deviceId and channel
@@ -60,15 +91,12 @@ export async function POST(request: NextRequest) {
       const sensor = sensorStmt.get(internalDeviceId, reading.channel) as { id: string, type: string } | undefined;
 
       if (!sensor) {
-        errors.push({ channel: reading.channel, type: reading.type, message: `Sensor not found on device '${userVisibleId}' for channel ${reading.channel}.` });
+        errorsEncountered.push({ channel: reading.channel, type: reading.type, message: `Sensor not found on device '${userVisibleId}' for channel ${reading.channel}.` });
         continue;
       }
 
-      // Optional: Validate if the type in the payload matches the registered sensor type.
-      // The schema already validates if the type is a *known* sensor type.
-      // This check ensures it's the *expected* type for that specific channel.
       if (sensor.type !== reading.type) {
-         errors.push({ channel: reading.channel, type: reading.type, message: `Type mismatch for channel ${reading.channel}. Expected '${sensor.type}', got '${reading.type}'.` });
+         errorsEncountered.push({ channel: reading.channel, type: reading.type, message: `Type mismatch for channel ${reading.channel}. Expected '${sensor.type}', got '${reading.type}'.` });
         continue;
       }
 
@@ -86,24 +114,27 @@ export async function POST(request: NextRequest) {
     }
 
     if (readingsProcessed > 0) {
-      // Revalidate paths to update UI
-      revalidatePath('/');        // Dashboard page
-      revalidatePath('/sensors'); // Sensors list page
-      revalidatePath('/charts');  // Charts page (shows latest value or could be affected)
+      revalidatePath('/');
+      revalidatePath('/sensors');
+      revalidatePath('/charts');
     }
 
-    if (errors.length > 0) {
+    if (errorsEncountered.length > 0) {
+      const status = readingsProcessed > 0 ? 207 : 400; // 207 Multi-Status if partially successful
+      logFailedRequest(request, payload, 'Partial Ingestion Error', errorsEncountered, status, userVisibleId);
       return NextResponse.json({ 
-        success: readingsProcessed > 0, // True if at least one reading was processed
+        success: readingsProcessed > 0, 
         message: `Processed ${readingsProcessed} out of ${readings.length} readings. Some errors occurred.`,
-        errors: errors 
-      }, { status: readingsProcessed > 0 ? 207 : 400 }); // 207 Multi-Status if partially successful
+        errors: errorsEncountered 
+      }, { status });
     }
 
     return NextResponse.json({ success: true, message: `Successfully processed ${readingsProcessed} readings for device '${userVisibleId}'.` }, { status: 201 });
 
   } catch (error: any) {
     console.error('API - Failed to ingest sensor readings:', error);
-    return NextResponse.json({ success: false, message: 'An internal server error occurred.' }, { status: 500 });
+    const errorMessage = 'An internal server error occurred.';
+    logFailedRequest(request, payload, 'Internal Server Error', error.message || errorMessage, 500, userVisibleId);
+    return NextResponse.json({ success: false, message: errorMessage }, { status: 500 });
   }
 }

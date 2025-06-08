@@ -7,7 +7,7 @@ export interface SensorData {
   value: number | null; // Mapped from currentValue, can be null if no reading yet
   unit: string;
   timestamp: Date | null; // Mapped from lastTimestamp, can be null
-  deviceId: string; // Changed from 'device' to 'deviceId'
+  deviceId: string; // System ID of the device
 }
 
 export interface DisplayConfig {
@@ -35,7 +35,21 @@ export interface DBSensor {
   type: SensorData['type'];
   channel: number;
   unit: string;
-  deviceId: string;
+  deviceId: string; // System ID of the device
   currentValue: number | null;
   lastTimestamp: string | null; // ISO 8601 string
+}
+
+// Represents a log entry for an API request
+export interface ApiRequestLog {
+  id: number;
+  timestamp: string; // ISO 8601 string
+  ip_address: string | null;
+  method: string;
+  path: string;
+  device_id_attempted: string | null;
+  payload_received: string | null;
+  error_type: string;
+  error_details: string | null;
+  status_code_returned: number;
 }

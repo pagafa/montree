@@ -46,7 +46,8 @@ function initializeDatabase(db: Database.Database) {
       deviceId TEXT NOT NULL,
       currentValue REAL, 
       lastTimestamp TEXT, 
-      FOREIGN KEY (deviceId) REFERENCES devices(id) ON DELETE CASCADE
+      FOREIGN KEY (deviceId) REFERENCES devices(id) ON DELETE CASCADE,
+      UNIQUE(deviceId, channel) -- Ensure channel is unique per device
     );
 
     CREATE TABLE IF NOT EXISTS sensor_readings (
@@ -56,8 +57,21 @@ function initializeDatabase(db: Database.Database) {
       value REAL NOT NULL,
       FOREIGN KEY (sensorId) REFERENCES sensors(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS api_request_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        ip_address TEXT,
+        method TEXT NOT NULL,
+        path TEXT NOT NULL,
+        device_id_attempted TEXT,
+        payload_received TEXT,
+        error_type TEXT NOT NULL,
+        error_details TEXT,
+        status_code_returned INTEGER NOT NULL
+    );
   `);
-  console.log('Database schema initialized (devices, sensors, sensor_readings tables created if not exist).');
+  console.log('Database schema initialized (devices, sensors, sensor_readings, api_request_logs tables created if not exist).');
 }
 
 // Initialize the database schema on first import/run
@@ -68,4 +82,3 @@ if (dbInstance) {
 }
 
 export const db = dbInstance;
-
