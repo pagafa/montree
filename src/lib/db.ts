@@ -44,15 +44,11 @@ function initializeDatabase(db: Database.Database) {
       channel INTEGER NOT NULL,
       unit TEXT NOT NULL,
       deviceId TEXT NOT NULL,
-      -- For simplicity, we'll store the last known value and timestamp here.
-      -- A separate 'readings' table would be better for historical data.
       currentValue REAL, 
       lastTimestamp TEXT, 
       FOREIGN KEY (deviceId) REFERENCES devices(id) ON DELETE CASCADE
     );
 
-    -- Example of a readings table for historical data (optional for now)
-    /*
     CREATE TABLE IF NOT EXISTS sensor_readings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       sensorId TEXT NOT NULL,
@@ -60,9 +56,8 @@ function initializeDatabase(db: Database.Database) {
       value REAL NOT NULL,
       FOREIGN KEY (sensorId) REFERENCES sensors(id) ON DELETE CASCADE
     );
-    */
   `);
-  console.log('Database schema initialized (devices, sensors tables created if not exist).');
+  console.log('Database schema initialized (devices, sensors, sensor_readings tables created if not exist).');
 }
 
 // Initialize the database schema on first import/run
@@ -73,3 +68,4 @@ if (dbInstance) {
 }
 
 export const db = dbInstance;
+

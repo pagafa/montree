@@ -5,18 +5,17 @@ import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import SensorTimeSeriesChart from '@/components/dashboard/SensorTimeSeriesChart';
-import { generateSensorReadings } from '@/lib/mock-data';
-import type { SensorData, SensorReading, ManagedDevice, DBSensor } from '@/types';
+import type { SensorReading, ManagedDevice, DBSensor } from '@/types';
 import { BarChart3, LineChart, ChevronRight, Loader2 } from 'lucide-react';
 import { getDevices } from '@/app/devices/actions';
-import { getSensors as getAllDbSensors } from '@/app/sensors/actions'; // Renamed to avoid conflict
+import { getSensors as getAllDbSensors } from '@/app/sensors/actions';
+import { getSensorReadings } from '@/app/readings/actions'; // Import new action
 import { useToast } from '@/hooks/use-toast';
 
-// Helper to map DBSensor to a simpler SensorData-like structure for dropdowns if needed
 interface ChartSensorInfo {
   id: string;
   name: string;
-  type: SensorData['type'];
+  type: DBSensor['type'];
   unit: string;
   deviceId: string;
 }
@@ -38,6 +37,7 @@ export default function ChartsPage() {
   const [selectedSensorId, setSelectedSensorId] = useState<string | null>(null);
   const [sensorReadings, setSensorReadings] = useState<SensorReading[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingReadings, setIsLoadingReadings] = useState(false);
   const { toast } = useToast();
 
   const fetchInitialData = useCallback(async () => {
@@ -71,24 +71,30 @@ export default function ChartsPage() {
   }, [selectedDeviceId, allDbSensors]);
 
   useEffect(() => {
-    // Reset sensor selection and readings if device changes
     setSelectedSensorId(null);
     setSensorReadings([]);
   }, [selectedDeviceId]);
 
   useEffect(() => {
     if (selectedSensorId && selectedDeviceId) {
-      const selectedSensorInfo = sensorsOfSelectedDevice.find(s => s.id === selectedSensorId);
-      if (selectedSensorInfo) {
-        // For charts, we still use mock readings generator.
-        // In a real scenario, this would fetch historical data from the DB.
-        const readings = generateSensorReadings(selectedSensorInfo.name, selectedSensorInfo.type);
-        setSensorReadings(readings);
-      }
+      const fetchReadings = async () => {
+        setIsLoadingReadings(true);
+        try {
+          const readings = await getSensorReadings(selectedSensorId);
+          setSensorReadings(readings);
+        } catch (error) {
+          console.error("Failed to fetch sensor readings:", error);
+          toast({ title: "Error", description: "Could not load readings for the selected sensor.", variant: "destructive" });
+          setSensorReadings([]);
+        } finally {
+          setIsLoadingReadings(false);
+        }
+      };
+      fetchReadings();
     } else {
       setSensorReadings([]);
     }
-  }, [selectedSensorId, selectedDeviceId, sensorsOfSelectedDevice]);
+  }, [selectedSensorId, selectedDeviceId, toast]);
 
   const selectedSensorDetails = useMemo(() => {
     if (!selectedSensorId) return null;
@@ -107,7 +113,7 @@ export default function ChartsPage() {
       <Card className="shadow-md rounded-lg">
         <CardHeader>
           <CardTitle>Sensor Data Time Series</CardTitle>
-          <CardDescription>Select a device, then a sensor to view its historical readings (mock data).</CardDescription>
+          <CardDescription>Select a device, then a sensor to view its historical readings from the database.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {isLoading ? (
@@ -139,7 +145,7 @@ export default function ChartsPage() {
 
               <Select
                 onValueChange={(value) => setSelectedSensorId(value)}
-                disabled={!selectedDeviceId || sensorsOfSelectedDevice.length === 0}
+                disabled={!selectedDeviceId || sensorsOfSelectedDevice.length === 0 || isLoadingReadings}
                 value={selectedSensorId || ""}
               >
                 <SelectTrigger className="w-full sm:w-[250px]">
@@ -155,7 +161,14 @@ export default function ChartsPage() {
               </Select>
             </div>
 
-            {selectedSensorId && selectedSensorDetails ? (
+            {isLoadingReadings && (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="ml-2 text-muted-foreground">Loading sensor readings...</p>
+              </div>
+            )}
+
+            {!isLoadingReadings && selectedSensorId && selectedSensorDetails ? (
               <div>
                 <h3 className="text-lg font-semibold mb-2 text-foreground">
                   Readings for: {selectedSensorDetails.deviceName} - {selectedSensorDetails.sensorName}
@@ -166,11 +179,11 @@ export default function ChartsPage() {
                   <div className="flex flex-col items-center justify-center h-60 text-muted-foreground border-2 border-dashed border-border rounded-lg">
                     <LineChart size={40} className="mb-3 text-primary" />
                     <p className="text-md font-semibold">No readings available for this sensor.</p>
-                    <p className="text-sm">Mock data might not have generated readings or this would fetch historical data.</p>
+                    <p className="text-sm">This sensor may not have any recorded data yet.</p>
                   </div>
                 )}
               </div>
-            ) : (
+            ) : !isLoadingReadings && (
               <div className="flex flex-col items-center justify-center h-64 text-muted-foreground border-2 border-dashed border-border rounded-lg">
                 <BarChart3 size={48} className="mb-4 text-primary" />
                 <p className="text-lg font-semibold">
