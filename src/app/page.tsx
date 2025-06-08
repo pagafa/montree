@@ -33,6 +33,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     // This will only run on the client, after initial hydration
+    // to correctly get the window.location.origin
     setApiUrl(`${window.location.origin}/api/ingest-readings`);
   }, []); // Empty dependency array ensures this runs once on mount
 
@@ -76,7 +77,7 @@ export default function DashboardPage() {
   
   return (
     <AppLayout pageTitle="Dashboard Overview">
-      <Card className="mb-6 shadow-md rounded-lg">
+      <Card className="mb-6 shadow-lg rounded-lg border border-border"> {/* Applied shadow-lg and explicit border */}
         <CardHeader className="pb-3">
           <div className="flex items-center">
             <Info className="h-5 w-5 mr-2 text-primary" />
@@ -105,9 +106,9 @@ export default function DashboardPage() {
 }`}
           </pre>
            <p className="text-xs text-muted-foreground mt-3">
-            Note: The `device_id` should be the user-visible ID you assign to devices.
-            The `timestamp` in the payload is for the batch of readings. Individual sensor readings will be recorded with the server's current time when processed.
-            The `channel` field is mandatory for each reading (1-8). Sensor `type` should match system types (e.g., "Temperature", "CO2").
+            Note: The \`device_id\` should be the user-visible ID you assign to devices.
+            The \`timestamp\` in the payload is for the batch of readings. Individual sensor readings will be recorded with the server's current time when processed.
+            The \`channel\` field is mandatory for each reading (1-8). Sensor \`type\` should match system types (e.g., "Temperature", "CO2").
           </p>
         </CardContent>
       </Card>
