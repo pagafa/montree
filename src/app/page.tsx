@@ -29,7 +29,7 @@ export default function DashboardPage() {
   const [devices, setDevices] = useState<ManagedDevice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const [apiUrl, setApiUrl] = useState('/api/ingest-readings'); // Default for SSR
+  const [apiUrl, setApiUrl] = useState(''); // Default empty, set by useEffect
 
   useEffect(() => {
     // This will only run on the client, after initial hydration
@@ -45,9 +45,8 @@ export default function DashboardPage() {
         getAllDbDevices()  // Fetches all devices
       ]);
       
-      // For the dashboard overview, let's take a slice of sensors or all if less than 10
-      const sensorsForDashboard = fetchedDbSensors.slice(0, 10).map(mapDbSensorToUi);
-      setSensorData(sensorsForDashboard);
+      const sensorsForDashboard = fetchedDbSensors.map(mapDbSensorToUi);
+      setSensorData(sensorsForDashboard); // Display all sensors on dashboard for now
       setDevices(fetchedDevices);
 
     } catch (error) {
@@ -77,18 +76,23 @@ export default function DashboardPage() {
   
   return (
     <AppLayout pageTitle="Dashboard Overview">
-      {/* Simplified API Information Card */}
       <Card className="mb-6 shadow-lg rounded-lg border border-border p-4">
         <div className="flex items-center mb-2">
           <Info className="h-5 w-5 mr-2 text-primary" />
           <CardTitle className="text-lg">Device Data Ingestion API</CardTitle>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Your devices should send POST requests to the following URL:
-        </p>
-        <div className="mt-2 p-3 bg-muted rounded-md">
-          <code className="text-sm font-mono text-foreground break-all">{apiUrl}</code>
-        </div>
+        {apiUrl ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Your devices should send POST requests to the following URL:
+            </p>
+            <div className="mt-2 p-3 bg-muted rounded-md">
+              <code className="text-sm font-mono text-foreground break-all">{apiUrl}</code>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">Loading API endpoint URL...</p>
+        )}
         <p className="text-xs text-muted-foreground mt-3">
           Expected JSON payload format:
         </p>
